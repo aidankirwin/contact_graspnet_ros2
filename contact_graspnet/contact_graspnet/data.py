@@ -310,6 +310,19 @@ def load_available_input_data(p, K=None):
     else:
         cam_K = np.eye(3, dtype=np.float32)
 
+    # cam_K = np.array([
+    #     [554.3827128226441, 0.0, 320.0],
+    #     [0.0, 554.3827128226441, 240.0],
+    #     [0.0, 0.0, 1.0]
+    # ])
+
+    # # If a K was provided by caller, use it.
+    # if K is not None:
+    #     cam_K = np.asarray(K, dtype=np.float32).reshape(3, 3)
+    # # Otherwise, if still None, pick a safe default (identity for cloud-only)
+    # if cam_K is None:
+    #     cam_K = np.eye(3, dtype=np.float32)
+
     if '.np' in p:
         data = np.load(p, allow_pickle=True)
         if '.npz' in p:

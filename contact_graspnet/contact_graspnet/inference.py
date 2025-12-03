@@ -20,6 +20,7 @@ from contact_grasp_estimator import GraspEstimator
 # from visualization_utils import visualize_grasps, show_image
 
 import json
+from pathlib import Path
 
 def inference(global_config, checkpoint_dir, input_paths, K=None, local_regions=True, skip_border_objects=False, filter_grasps=True, segmap_id=None, z_range=[0.2,1.8], forward_passes=1):
     """
@@ -62,6 +63,13 @@ def inference(global_config, checkpoint_dir, input_paths, K=None, local_regions=
         print('Loading ', p, file=sys.stderr)
 
         pc_segments = {}
+        if FLAGS.K_path:
+            try:
+                K = np.load(FLAGS.K_path).reshape(3, 3).astype('float32')
+                print(f"[CGN] Loaded K from {FLAGS.K_path}:\n{K}")
+            except Exception as e:
+                print(f"[CGN] Warning: failed to load K from {FLAGS.K_path}: {e}")
+                K = None
         segmap, rgb, depth, cam_K, pc_full, pc_colors = load_available_input_data(p, K=K)
         
         # added fall-back 2025
@@ -85,17 +93,25 @@ def inference(global_config, checkpoint_dir, input_paths, K=None, local_regions=
                   pred_grasps_cam=pred_grasps_cam, scores=scores, contact_pts=contact_pts)
 
         # Pack to json to pass to ROS2 server outside of the Docker via subprocess
+        
+        result_dict = {
+            "pred_grasps_cam": {str(k): [g.tolist() for g in v] for k, v in pred_grasps_cam.items()},
+            "scores": {str(k): v.tolist() for k, v in scores.items()},
+            "contact_pts": {str(k): v.tolist() for k, v in contact_pts.items()},
+        }
         if json_out:
-            result_dict = {
-                "pred_grasps_cam": {str(k): [g.tolist() for g in v] for k, v in pred_grasps_cam.items()},
-                "scores": {str(k): v.tolist() for k, v in scores.items()},
-                "contact_pts": {str(k): v.tolist() for k, v in contact_pts.items()},
-            }
             # Important: send JSON to stdout only (stdout → only JSON, server can parse. stderr → debug logs, still visible if you run manually.)
             sys.stdout.write("<<<BEGIN_JSON>>>\n")
             sys.stdout.write(json.dumps(result_dict) + "\n")
             sys.stdout.write("<<<END_JSON>>>\n")
             sys.stdout.flush()
+
+        # Convert to JSON and write
+        out_path = Path("./results/predictions_scene_live.json")
+        with out_path.open("w") as f:
+            json.dump(result_dict, f, indent=2)
+
+        print(f"[CGN] Saved JSON predictions to: {out_path.resolve()}")
 
         # # Visualize results          
         # show_image(rgb, segmap)
@@ -119,6 +135,8 @@ if __name__ == "__main__":
     parser.add_argument('--segmap_id', type=int, default=0,  help='Only return grasps of the given object id')
     parser.add_argument('--arg_configs', nargs="*", type=str, default=[], help='overwrite config parameters')
     # parser.add_argument("--json_out", action="store_true", help="Output results as JSON to stdout")
+    parser.add_argument('--K_path', type=str, default='', help='Path to 3x3 intrinsics (np.save format)')
+
     FLAGS = parser.parse_args()
 
     global_config = config_utils.load_config(FLAGS.ckpt_dir, batch_size=FLAGS.forward_passes, arg_configs=FLAGS.arg_configs)

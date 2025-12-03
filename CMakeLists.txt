@@ -70,15 +70,15 @@ install(PROGRAMS
 #   RENAME grasp_loader_server
 # )
 install(PROGRAMS
-  contact_graspnet_ros2/grasp_executor_local_server.py
+  contact_graspnet_ros2/grasp_executor_rgbd_server.py
   DESTINATION lib/${PROJECT_NAME}
-  RENAME grasp_executor_local_server
+  RENAME grasp_executor_rgbd_server
 )
 
 install(PROGRAMS
-  contact_graspnet_ros2/grasp_executor_server.py
+  contact_graspnet_ros2/grasp_executor_cloud_server.py
   DESTINATION lib/${PROJECT_NAME}
-  RENAME grasp_executor_server
+  RENAME grasp_executor_cloud_server
 )
 
 # Launch files
