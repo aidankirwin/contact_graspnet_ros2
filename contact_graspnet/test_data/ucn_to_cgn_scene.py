@@ -256,25 +256,28 @@ def parse_args() -> argparse.Namespace:
         description="Convert UCN outputs + RGBD into Contact-GraspNet-style scene_from_ucn.npy"
     )
 
-    parser.add_argument("--rgb", type=str, default="from_rgbd-color.png",
+    unseen_obj_clst_seg_path = "/home/csrobot/graspnet_ws/src/unseen_obj_clst_ros2/compare_UnseenObjectClustering/segmentation_rgbd/"
+    cgn_data_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/"
+
+    parser.add_argument("--rgb", type=str, default=f"{unseen_obj_clst_seg_path}/input/from_rgbd-color.png",
                         help="Path to RGB color PNG")
-    parser.add_argument("--depth", type=str, default="from_rgbd-depth.png",
+    parser.add_argument("--depth", type=str, default=f"{unseen_obj_clst_seg_path}/input/from_rgbd-depth.png",
                         help="Path to depth PNG (uint16 mm)")
-    parser.add_argument("--im_label", type=str, default="im_label.npy",
+    parser.add_argument("--im_label", type=str, default=f"{unseen_obj_clst_seg_path}/output/segmentation_from_rgbd//segmentation_from_rgbd/im_label.npy",
                         help="Path to segmentation labels (H,W) int32")
-    parser.add_argument("--seg_json", type=str, default="segmentation.json",
+    parser.add_argument("--seg_json", type=str, default=f"{unseen_obj_clst_seg_path}/output/segmentation_from_rgbd/segmentation.json",
                         help="Path to segmentation JSON (optional)")
 
-    parser.add_argument("--fx", type=float, required=True,
+    parser.add_argument("--fx", type=float, default= 615.0, #required=True,
                         help="Camera focal length fx")
-    parser.add_argument("--fy", type=float, required=True,
+    parser.add_argument("--fy", type=float, default= 615.0, #required=True,
                         help="Camera focal length fy")
-    parser.add_argument("--cx", type=float, required=True,
+    parser.add_argument("--cx", type=float, default= 320.0, #required=True,
                         help="Principal point cx")
-    parser.add_argument("--cy", type=float, required=True,
+    parser.add_argument("--cy", type=float, default= 240.0, #required=True,
                         help="Principal point cy")
 
-    parser.add_argument("--out_scene", type=str, default="scene_from_ucn.npy",
+    parser.add_argument("--out_scene", type=str, default=f"{cgn_data_path}/scene_from_ucn.npy",
                         help="Output .npy path for scene dict")
 
     parser.add_argument("--dump_cloud", action="store_true",
@@ -302,6 +305,39 @@ def main():
         cy=args.cy,
         out_path=args.out_scene,
     )
+
+
+
+
+    # # --- Load RGB image ---
+    # rgb_bgr = cv2.imread('./sample_scene_ucn/sample_3/input/from_rgbd-color.png')      # (480, 640, 3), BGR
+    # rgb = cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)   # -> RGB uint8, like 0.npy['rgb']
+
+    # # --- Load depth and convert to meters ---
+    # depth_raw = cv2.imread('./sample_scene_ucn/sample_3/input/from_rgbd-depth.png', cv2.IMREAD_UNCHANGED).astype(np.float32)
+    # # depth_raw is uint16 mm → meters
+    # depth_m = depth_raw / 1000.0                     # (480, 640) float32
+
+    # # --- Load segmentation (either im_label.npy or segmentation.json) ---
+    # seg = np.load('./sample_scene_ucn/sample_3/output/segmentation_from_rgbd/im_label.npy').astype(np.float32)  # (480, 640) float32; matches json["instance_ids"]
+
+    # # --- Build K (you must fill in fx, fy, cx, cy for your camera) ---
+    # fx, fy = 615.0, 615.0   # example values – replace with your camera’s
+    # cx, cy = 320.0, 240.0
+    # K = np.array([[fx, 0.0, cx],
+    #               [0.0, fy, cy],
+    #               [0.0, 0.0, 1.0]], dtype=np.float64)
+
+    # # --- Pack into dict matching 0.npy’s structure ---
+    # scene_dict = {
+    #     'rgb':   rgb,       # HxWx3 uint8
+    #     'depth': depth_m,   # HxW float32, meters
+    #     'K':     K,         # 3x3 float64
+    #     'seg':   seg        # HxW float32 labels
+    # }
+
+    # np.save('./scene_from_ucn.npy', scene_dict)
+
 
     # 2) Optionally: compute XYZ image + masked Nx3 and dump them for CGN debugging
     if args.dump_cloud:

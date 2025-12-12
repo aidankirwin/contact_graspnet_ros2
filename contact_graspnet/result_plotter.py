@@ -14,8 +14,18 @@ def depth_to_point_cloud(depth, K):
     Z = z
     return np.stack((X, Y, Z), axis=-1)
 
+
+# ------------------------------------------------------------------
+# Paths (adjust as you like)
+# ------------------------------------------------------------------
+npz_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/predictions_scene_from_ucn.npz"
+scene_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/scene_from_ucn.npy"
+save_image_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/scene_from_ucn_plot.png"
+
+
+# ------------------------------------------------------------------
 # Load predictions
-npz_path = "results/predictions_scene_from_ucn_1.npz"
+# ------------------------------------------------------------------
 data = np.load(npz_path, allow_pickle=True)
 grasps = data["pred_grasps_cam"].item()
 scores = data["scores"].item()
@@ -23,31 +33,28 @@ contacts = data["contact_pts"].item()
 
 print("Loaded grasp predictions for object IDs:", list(grasps.keys()))
 
+# ------------------------------------------------------------------
 # Load original depth data and intrinsics
-pc_data = np.load("test_data/sample_scene_ucn/sample_1/scene_from_ucn.npy", allow_pickle=True).item()
+# ------------------------------------------------------------------
+pc_data = np.load(scene_path, allow_pickle=True).item()
 depth = pc_data["depth"]
 K = pc_data["K"]
 pc_points = depth_to_point_cloud(depth, K)
 print(f"Point cloud shape: {pc_points.shape}")
 
-# Convert to Open3D point cloud
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(pc_points)
 pcd.paint_uniform_color([0.5, 0.5, 0.5])  # grey base
-# geometries = [pcd]
 
-pc_points = depth_to_point_cloud(depth, K)
-pcd = o3d.geometry.PointCloud()
-pcd.points = o3d.utility.Vector3dVector(pc_points)
 
-# ---------------------------------------------------------
-# Zoom in: crop point cloud around its center
-# ---------------------------------------------------------
+# ------------------------------------------------------------------
+# Optional zoom: crop point cloud around its center
+# ------------------------------------------------------------------
 pts_np = np.asarray(pcd.points)
-center = np.array([0,0,0]) #pts_np.mean(axis=0)
+center = [0.0, 0, 0.3]  # center around the actual points
 
 # Size of the zoom box (meters) – tweak as needed
-dx, dy, dz = 2.30, 2.30, 2.30   # +/- 30 cm in x,y,z around the center
+dx, dy, dz = 2.30, 2.30, 2.30
 
 min_bound = center - np.array([dx, dy, dz])
 max_bound = center + np.array([dx, dy, dz])
@@ -59,36 +66,23 @@ bbox = o3d.geometry.AxisAlignedBoundingBox(
     min_bound=min_bound,
     max_bound=max_bound
 )
-
 pcd_cropped = pcd.crop(bbox)
 print("[INFO] Original points:", pts_np.shape[0],
       " -> Cropped points:", np.asarray(pcd_cropped.points).shape[0])
 
-# Use cropped cloud in the viewer
 geometries = [pcd_cropped]
 
 
-
-
-# Predefined colors for visualization
-colors = [
-    [1, 0, 0],    # red
-    [0, 1, 0],    # green
-    [0, 0, 1],    # blue
-    [1, 1, 0],    # yellow
-    [1, 0, 1],    # magenta
-    [0, 1, 1],    # cyan
-    [1, 0.5, 0],  # orange
-    [0.6, 0.4, 1] # purple
-]
-
-
-# Visualize top grasps per object
-for idx, obj_id in enumerate(grasps.keys()):
+# ------------------------------------------------------------------
+# Add coordinate frames for predicted grasps
+# (X=red, Y=green, Z=blue by default in Open3D)
+# ------------------------------------------------------------------
+for obj_id in grasps.keys():
     g_mats = grasps[obj_id]
     sc = scores[obj_id]
-    top_idxs = np.argsort(-sc)[:5]  # top 5 grasps
-    color = colors[idx % len(colors)]
+
+    # Sort by score, highest first
+    top_idxs = np.argsort(-sc)  # you can slice [:N] if you want fewer
 
     for i in top_idxs:
         g = g_mats[i]
@@ -96,9 +90,50 @@ for idx, obj_id in enumerate(grasps.keys()):
         T[:4, :4] = g
         frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05)
         frame.transform(T)
-        frame.paint_uniform_color(color)
+        # IMPORTANT: do NOT paint_uniform_color here
+        # so that X=red, Y=green, Z=blue remain intact.
         geometries.append(frame)
+
+
+# ------------------------------------------------------------------
+# Custom draw: set view & save screenshot
+# ------------------------------------------------------------------
+def custom_draw(vis: o3d.visualization.Visualizer):
+    """
+    This callback runs once when the window is created.
+
+    It:
+      - sets a nicer default view (avoid upside-down scene),
+      - saves a screenshot to `save_image_path`,
+      - and then returns False to close the window.
+    """
+    ctr = vis.get_view_control()
+
+    # Set a reasonable view:
+    #   - look at the point cloud center
+    #   - front points roughly from +Y towards -Z (tweak if needed)
+    #   - up is +Z
+    ctr.set_lookat([0, 0, 0.3])
+    ctr.set_front([0.1, -0.8, 1.0])  # direction camera looks towards
+    ctr.set_up([0, 0, -1])       # "up" direction
+    ctr.set_zoom(1)                 # zoom factor (tweak as needed)
+
+    vis.update_renderer()
+    vis.capture_screen_image(save_image_path, do_render=True)
     
 
-# Render
-o3d.visualization.draw_geometries(geometries)
+    # Return False to stop after one frame,
+    # or True if you want the window to stay interactive.
+    return True
+
+
+
+# o3d.visualization.draw_geometries(geometries)
+
+# Render with our custom callback
+o3d.visualization.draw_geometries_with_animation_callback(
+    geometries,
+    custom_draw
+)
+
+print(f"[INFO] Saved screenshot to: {save_image_path}")

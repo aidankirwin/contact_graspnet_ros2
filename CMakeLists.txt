@@ -53,11 +53,12 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pythonpath.dsv
 # )
 
 # --- Install your ROS 2 python nodes as executables ---
-install(PROGRAMS
-  contact_graspnet_ros2/grasp_server.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME grasp_server
-)
+# install(PROGRAMS
+#   contact_graspnet_ros2/grasp_server.py
+#   DESTINATION lib/${PROJECT_NAME}
+#   RENAME grasp_server
+# )
+
 install(PROGRAMS
   contact_graspnet_ros2/client_grasp_request.py
   DESTINATION lib/${PROJECT_NAME}
@@ -80,6 +81,12 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
   RENAME grasp_executor_cloud_server
 )
+
+# install(PROGRAMS
+#   contact_graspnet_ros2/debug_cgn_grasp_marker.py
+#   DESTINATION lib/${PROJECT_NAME}
+#   RENAME debug_cgn_grasp_marker
+# )
 
 # Launch files
 install(DIRECTORY launch

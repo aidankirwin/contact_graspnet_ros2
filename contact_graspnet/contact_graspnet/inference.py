@@ -107,7 +107,7 @@ def inference(global_config, checkpoint_dir, input_paths, K=None, local_regions=
             sys.stdout.flush()
 
         # Convert to JSON and write
-        out_path = Path("./results/predictions_scene_live.json")
+        out_path = Path("./results/predictions_scene_from_ucn.json")
         with out_path.open("w") as f:
             json.dump(result_dict, f, indent=2)
 
