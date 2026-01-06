@@ -1,7 +1,7 @@
 # Base image: CUDA 11.8 with cuDNN 8 on Ubuntu 22.04 (includes dev‑tools)
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 
-# NOTE: To build docker, run: "docker build -t contact_graspnet:cuda118 ."
+# NOTE: To build docker, run: "docker build -t cuda118:contact_graspnet -f Dockerfile_CGN ."
 
 # Remove dangling images left from previous builds
 docker image prune -f
@@ -51,7 +51,7 @@ WORKDIR /root/graspnet_ws
 
 
 # Clone the Contact-GraspNet source
-RUN git clone https://github.com/JohnBrann/contact_graspnet .
+# RUN git clone https://github.com/JohnBrann/contact_graspnet .
 
 # Remove the mayavi pin from environment.yaml (we'll install via conda-forge)
 RUN sed -i '/mayavi==/d' environment.yaml
@@ -106,17 +106,11 @@ RUN apt update && apt install -y \
     git \
     && rosdep init && rosdep update
 
-# Create new conda env for UnseenObjectClustering
-COPY requirements_ucn_env.txt /root/requirements_ucn_env.txt
-RUN conda create -y -n unseen_obj python=3.9 && \
-    conda run -n unseen_obj pip install -r /root/requirements_ucn_env.txt
 
 # Source ROS 2 setup in every shell
 RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
 
 # RUN echo "conda activate contact-graspnet" >> ~/.bashrc
-
-
 
 # Default to an interactive bash login shell
 CMD ["bash", "-l"]

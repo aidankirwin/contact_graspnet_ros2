@@ -57,13 +57,11 @@ This script launches the Contact-GraspNet container with the proper environment 
 	source install/setup.bash
 	```
 3. **Run the ROS 2 server** (in one terminal):
+
 	```bash
-	ros2 run contact_graspnet_ros2 grasp_executor_rgbd_server
+	ros2 run contact_graspnet_ros2 grasp_executor_server
 	```
-	or
-	```bash
-	ros2 run contact_graspnet_ros2 grasp_executor_cloud_server
-	```
+	
 4. **Run the ROS 2 client** (in another terminal):
 	```bash
 	ros2 run contact_graspnet_ros2 client_grasp_request <scene_name>
@@ -77,3 +75,127 @@ This requests grasps for test_data/<scene_name>.npy.
  - The server uses subprocess + docker exec to call inference inside the container.
  - Inference results are serialized to JSON (<<<BEGIN_JSON>>> ... <<<END_JSON>>>) inside Docker and parsed by the server. If JSON extraction fails, the server falls back to raw line parsing for robustness.
  - You can extend this wrapper for other perception or grasp planning modules by reusing the same server–client communication pattern.
+
+ ---
+ ---
+
+
+ ## 1. Real-time ROS 2 grasp server
+
+This repository provides **two complementary ROS 2 wrappers for Contact-GraspNet**, enabling integration with real-world sensor inputs depending on the perception pipeline and available modalities.
+
+ ###  Real-Time RGB-D Scene Integration (**Recommended**)
+We introduce a ROS 2 server, **`grasp_executor_rgbd_server`**, which enables Contact-GraspNet to operate directly on **live RGB-D scenes** (e.g., from Gazebo or a physical camera), instead of only static, pre-generated datasets.
+
+**Run the ROS 2 server with Live RGB-D inputs**
+```bash
+ros2 run contact_graspnet_ros2 grasp_executor_rgbd_server
+```
+
+The **RGB-D wrapper** is designed for perception pipelines that start from synchronized color and depth images. This variant:
+
+- Accepts live RGB-D images from simulation (Gazebo) or physical cameras  
+- Converts RGB-D observations into Contact-GraspNet scene representations  
+- Applies explicit camera and gripper frame alignment for correct TF integration  
+- Works **out of the box** with our ROS 2 Unseen Object Clustering wrapper  
+
+Key features:
+- ROS 2 service interface for grasp requests.
+- Converts live RGB-D inputs (and optional instance segmentation outputs) into Contact-GraspNet-compatible scene files.
+- Launches Contact-GraspNet inference **inside Docker via `subprocess`**, enabling:
+  - ROS 2 on the host (modern Python, CUDA, drivers).
+  - Contact-GraspNet running in a controlled container environment.
+- Parses inference outputs and returns grasp poses to ROS 2 clients for planning and execution.
+
+This design supports modular integration with upstream perception modules, including:
+- **Unseen Object Clustering (ROS 2 wrapper)**  
+  https://github.com/zhaohuajing/unseen_obj_clst_ros2
+- Other RGB-D or image-based object detection and segmentation algorithms.
+
+A **full perception-to-action pipeline example** using FlexBE state machines is available at:
+- https://github.com/zhaohuajing/compare_flexbe  
+  (branch: `feature/cgn`)
+
+
+This enables a full **RGB-D → segmentation → grasp planning → MoveIt** pipeline without requiring intermediate point cloud processing by the user. For this reason, the RGB-D interface is currently the **recommended entry point** for end-to-end perception-to-action workflows in both simulation and real hardware.
+
+---
+
+### Real-Time PointCloud Scene Integration 
+
+We also provide a **point cloud–based Contact-GraspNet wrapper**, intended for pipelines that operate directly on 3D geometry rather than images. This variant:
+
+- Accepts point clouds as input  
+- Bypasses RGB-D image handling and segmentation  
+- Supports Contact-GraspNet inference on raw or preprocessed point clouds  
+
+**Run the ROS 2 server with Live PointCloud inputs**
+
+```bash
+ros2 run contact_graspnet_ros2 grasp_executor_cloud_server
+```
+
+However, this point cloud interface is **not directly compatible** with the Unseen Object Clustering RGB-D pipeline provided in this repository, which operates on image-based segmentation. Instead, it is better suited for integration with:
+- Point cloud–based object detection or segmentation models  
+- Scene reconstruction or multi-view fusion pipelines  
+- External perception systems that already output filtered or labeled point clouds  
+
+With appropriate upstream perception, the point cloud wrapper can be used as an alternative grasp planning backend, but it requires the user to manage object isolation and point cloud preparation externally.
+
+
+---
+
+## 2. Frame Alignment Between Contact-GraspNet and ROS TF
+
+A major contribution of this work is the **explicit and correct alignment of frame conventions** between Contact-GraspNet and standard ROS TF / URDF definitions.
+
+### Camera frame alignment
+
+Contact-GraspNet internally represents grasps in the **camera optical frame**:
+
+- x: right  
+- y: down  
+- z: forward  
+
+In contrast, ROS camera frames (e.g., `camera_link`) typically use:
+
+- X: forward  
+- Y: left  
+- Z: up  
+
+We apply a fixed rotation: `R_optical → camera_link` to map Contact-GraspNet grasp poses into the ROS TF tree correctly. This resolves systematic position errors such as grasps floating above the table or shifted laterally.
+
+### Gripper / end-effector frame alignment
+
+Contact-GraspNet’s **grasp frame** does not exactly match the Panda gripper (`panda_hand`) convention used by ROS and MoveIt.
+
+Based on inspection of prior implementations (e.g., SceneReplica), we introduce an additional **constant gripper-frame rotation** to reconcile differences in:
+- Palm orientation
+- End-effector X/Y axis definitions
+
+After applying both:
+1. Camera optical → ROS camera frame rotation, and  
+2. Contact-GraspNet grasp frame → Panda gripper frame rotation,
+
+the resulting grasp poses are:
+- Correctly aligned in position,
+- Correctly oriented for execution,
+- Directly usable by MoveIt without ad-hoc offsets.
+
+These transformations are implemented in `grasp_executor_rgbd_server.py` and documented inline.
+
+---
+
+## 3. Debugging and Visualization Utilities
+
+To support validation and debugging, this repository includes:
+- RViz marker publishers for visualizing transformed grasp poses.
+- Optional saving of intermediate results (JSON / NPZ / TXT) for offline inspection.
+- Improved plotting utilities for Contact-GraspNet outputs with:
+  - Consistent axis coloring (X=red, Y=green, Z=blue),
+  - Fixed camera viewpoints,
+  - Deterministic screenshot export.
+
+These tools were essential for verifying correctness across:
+camera → pedestal → robot base → end-effector frames.
+

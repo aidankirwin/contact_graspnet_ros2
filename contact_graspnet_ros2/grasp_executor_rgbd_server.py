@@ -262,7 +262,6 @@ class GraspServer(Node):
                 # 1) CGN optical frame -> ROS camera_link
                 T_cam = self.cgn_optical_to_ros_cam(T_cgn)
 
-               
 
                 # ----- NEW: constant “gripper frame” rotation offset -----
                 #
@@ -289,9 +288,6 @@ class GraspServer(Node):
                     [0.,  0., 0., 1.],
                 ])
                 T_gripper_offset = T_gripper_offset @ swap_xy
-                
-                # (leave commented out for now until you’re sure you need it)
-                # ------------------------------------------------------------
 
                  # ----- NEW: apply constant gripper-frame rotation -----
                 # T_cam is (camera_link -> CGN_graspFrame).
