@@ -87,6 +87,15 @@ This repository provides **two complementary ROS 2 wrappers for Contact-GraspNet
  ###  Real-Time RGB-D Scene Integration (**Recommended**)
 We introduce a ROS 2 server, **`grasp_executor_rgbd_server`**, which enables Contact-GraspNet to operate directly on **live RGB-D scenes** (e.g., from Gazebo or a physical camera), instead of only static, pre-generated datasets.
 
+Key features:
+- ROS 2 service interface for grasp requests.
+- Converts live RGB-D inputs (and optional instance segmentation outputs) into Contact-GraspNet-compatible scene files.
+- Launches Contact-GraspNet inference **inside Docker via `subprocess`**, enabling:
+  - ROS 2 on the host (modern Python, CUDA, drivers).
+  - Contact-GraspNet running in a controlled container environment.
+- Parses inference outputs and returns grasp poses to ROS 2 clients for planning and execution.
+
+
 **Run the ROS 2 server with Live RGB-D inputs**
 ```bash
 ros2 run contact_graspnet_ros2 grasp_executor_rgbd_server
@@ -99,13 +108,6 @@ The **RGB-D wrapper** is designed for perception pipelines that start from synch
 - Applies explicit camera and gripper frame alignment for correct TF integration  
 - Works **out of the box** with our ROS 2 Unseen Object Clustering wrapper  
 
-Key features:
-- ROS 2 service interface for grasp requests.
-- Converts live RGB-D inputs (and optional instance segmentation outputs) into Contact-GraspNet-compatible scene files.
-- Launches Contact-GraspNet inference **inside Docker via `subprocess`**, enabling:
-  - ROS 2 on the host (modern Python, CUDA, drivers).
-  - Contact-GraspNet running in a controlled container environment.
-- Parses inference outputs and returns grasp poses to ROS 2 clients for planning and execution.
 
 This design supports modular integration with upstream perception modules, including:
 - **Unseen Object Clustering (ROS 2 wrapper)**  
@@ -151,17 +153,7 @@ A major contribution of this work is the **explicit and correct alignment of fra
 
 ### Camera frame alignment
 
-Contact-GraspNet internally represents grasps in the **camera optical frame**:
-
-- x: right  
-- y: down  
-- z: forward  
-
-In contrast, ROS camera frames (e.g., `camera_link`) typically use:
-
-- X: forward  
-- Y: left  
-- Z: up  
+Contact-GraspNet internally represents grasps in the **camera optical frame** which mismatches with ROS camera frames (e.g., `camera_link`).
 
 We apply a fixed rotation: `R_optical → camera_link` to map Contact-GraspNet grasp poses into the ROS TF tree correctly. This resolves systematic position errors such as grasps floating above the table or shifted laterally.
 
@@ -197,5 +189,5 @@ To support validation and debugging, this repository includes:
   - Deterministic screenshot export.
 
 These tools were essential for verifying correctness across:
-camera → pedestal → robot base → end-effector frames.
+`camera → pedestal → robot base → end-effector frames`.
 
