@@ -1,0 +1,23 @@
+# ROS 2
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+
+# Models
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+
+# Docker artifacts
+*.tar
+
+# OS
+.DS_Store
+
+# specific
+contact_graspnet_docker/backup
