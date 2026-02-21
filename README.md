@@ -52,7 +52,7 @@ Navigate to `~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet_docker`
 	```bash
 	docker build -t cuda118:contact_graspnet -f Dockerfile_CGN .
 	```
-Alternatively, you may use the following command to pull the docker image for contact-graspnet from docker hub:
+	Alternatively, you may use the following command to pull the docker image for contact-graspnet from docker hub:
    ```
    docker pull zhaohuajing/cuda118:contact_graspnet
    ```
@@ -66,13 +66,13 @@ This script launches the Contact-GraspNet container with the proper environment 
 
 #### Compile the ROS 2 package:
 
-```bash
-cd ~/graspnet_ws
-colcon build --symlink-install
-source install/setup.bash
+	```bash
+	cd ~/graspnet_ws
+	colcon build --symlink-install
+	source install/setup.bash
 	```
 
-#### Test run of the ROS 2 server WITHOUT real-time inputs
+#### Test run of the ROS 2 server WITHOUT real-time inputs:
 
 - **Run the test ROS 2 server (in one terminal)**:
 
