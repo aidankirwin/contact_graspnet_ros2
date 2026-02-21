@@ -61,16 +61,16 @@ Navigate to `~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet_docker`
    ```bash
    ./run_docker.sh
    ```
-This script launches the Contact-GraspNet container with the proper environment and names it as: `contact_graspnet_container`
+	This script launches the Contact-GraspNet container with the proper environment and names it as: `contact_graspnet_container`
 
 
 #### Compile the ROS 2 package:
 
-	```bash
-	cd ~/graspnet_ws
-	colcon build --symlink-install
-	source install/setup.bash
-	```
+```bash
+cd ~/graspnet_ws
+colcon build --symlink-install
+source install/setup.bash
+```
 
 #### Test run of the ROS 2 server WITHOUT real-time inputs:
 
@@ -90,7 +90,6 @@ This requests grasps for test_data/<scene_name>.npy.
 ### Notes
 
  - The server uses subprocess + docker exec to call inference inside the container.
- - Inference results are serialized to JSON (<<<BEGIN_JSON>>> ... <<<END_JSON>>>) inside Docker and parsed by the server. If JSON extraction fails, the server falls back to raw line parsing for robustness.
  - You can extend this wrapper for other perception or grasp planning modules by reusing the same server–client communication pattern.
 
  ---
