@@ -41,35 +41,37 @@ Flow:
 - **Docker** with GPU runtime enabled (`nvidia-docker2` or `nvidia-container-toolkit`).  
 - **Built Docker image** for Contact-GraspNet (see `Dockerfile_CGN`).  
 
-- Assume repository ```contact_graspnet_ros2``` is put under ```~/graspnet_ws/src```
+- Assume repository `contact_graspnet_ros2` is put under `~/graspnet_ws/src`
 
 #### 2. Setup Docker container:
 
 - **Locate the Docker files**: 
-Navigate to ```~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet_docker```
+Navigate to `~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet_docker`
 
 - **Build the Docker image**:
-```bash
+	```bash
 	docker build -t cuda118:contact_graspnet -f Dockerfile_CGN .
-```
+	```
 Alternatively, you may use the following command to pull the docker image for contact-graspnet from docker hub:
    ```
    docker pull zhaohuajing/cuda118:contact_graspnet
    ```
 
-- **Start the Docker container**  
+- **Start the Docker container**:  
    ```bash
    ./run_docker.sh
    ```
-This script launches the Contact-GraspNet container with the proper environment and names it as: ```contact_graspnet_container```
+This script launches the Contact-GraspNet container with the proper environment and names it as: `contact_graspnet_container`
 
 
 #### Compile the ROS 2 package:
-	```bash
-	cd ~/graspnet_ws
-	colcon build --symlink-install
-	source install/setup.bash
+
+```bash
+cd ~/graspnet_ws
+colcon build --symlink-install
+source install/setup.bash
 	```
+
 #### Test run of the ROS 2 server WITHOUT real-time inputs
 
 - **Run the test ROS 2 server (in one terminal)**:
