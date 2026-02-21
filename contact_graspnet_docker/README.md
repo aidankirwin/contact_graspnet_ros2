@@ -1,18 +1,18 @@
 
 ## Usage  
 
-1. **Build the Docker image**:
+**Build the Docker image**:
 
 The Dockerfile referenced in the instructions is ``Dockerfile_CGN``. You can build the Docker image by running the following command:
-```bash
-docker build -t cuda118:contact_graspnet -f Dockerfile_CGN .
-```
+   ```bash
+   docker build -t cuda118:contact_graspnet -f Dockerfile_CGN .
+   ```
 Alternatively, you may use the following command to pull the docker image for contact-graspnet from docker hub:
-```
-docker pull zhaohuajing/cuda118:contact_graspnet
-```
+   ```
+   docker pull zhaohuajing/cuda118:contact_graspnet
+   ```
 
-2. **Start the Docker container** (if not already running):  
+**Start the Docker container** (if not already running):  
    ```bash
    ./run_docker.sh
    ```
