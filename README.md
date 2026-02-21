@@ -64,15 +64,18 @@ Navigate to `~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet_docker`
 	This script launches the Contact-GraspNet container with the proper environment and names it as: `contact_graspnet_container`
 
 
-#### Compile the ROS 2 package:
+#### 3. Compile the ROS 2 package:
 
-```bash
-cd ~/graspnet_ws
-colcon build --symlink-install
-source install/setup.bash
-```
+- Start an new terminal on the host machine (i.e., outside of the docker container). Assume repository `contact_graspnet_ros2` is put under `~/graspnet_ws/src`, run the following command:
+	```bash
+	cd ~/graspnet_ws
+	colcon build --symlink-install
+	source install/setup.bash
+	```
 
-#### Test run of the ROS 2 server WITHOUT real-time inputs:
+#### 4. Test run of the ROS 2 server WITHOUT real-time inputs:
+
+- Both server and client commands should run on the host machine (i.e., outside of the docker container).
 
 - **Run the test ROS 2 server (in one terminal)**:
 
@@ -87,7 +90,7 @@ source install/setup.bash
 This requests grasps for test_data/<scene_name>.npy.
 
 
-### Notes
+#### Notes
 
  - The server uses subprocess + docker exec to call inference inside the container.
  - You can extend this wrapper for other perception or grasp planning modules by reusing the same server–client communication pattern.
@@ -99,7 +102,7 @@ This requests grasps for test_data/<scene_name>.npy.
 
 This repository provides **two complementary ROS 2 wrappers for Contact-GraspNet**, enabling integration with real-world sensor inputs depending on the perception pipeline and available modalities.
 
- ### Real-time RGB-D Scene Integration (**Recommended**)
+ ### 1. Real-time RGB-D Scene Integration (**Recommended**)
 We introduce a ROS 2 server, **`grasp_executor_rgbd_server`**, which enables Contact-GraspNet to operate directly on **live RGB-D scenes** (e.g., from Gazebo or a physical camera), instead of only static, pre-generated datasets.
 
 **Key features:**
@@ -138,7 +141,7 @@ This enables a full **RGB-D → segmentation → grasp planning → MoveIt** pip
 
 ---
 
-### PointCloud Scene Integration (NOT recommended)
+### 2. PointCloud Scene Integration (NOT recommended)
 
 We also provide a **point cloud–based Contact-GraspNet wrapper**, intended for pipelines that operate directly on 3D geometry rather than images. This variant:
 
