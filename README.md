@@ -35,20 +35,20 @@ Flow:
 
 ## Setup instruction  
 
-1. **Prerequisites**:
+#### 1. Prerequisites:
 
 - **ROS 2 Jazzy** (or compatible distro) installed on host.  
 - **Docker** with GPU runtime enabled (`nvidia-docker2` or `nvidia-container-toolkit`).  
 - **Built Docker image** for Contact-GraspNet (see `Dockerfile_CGN`).  
 
-- Assuming repository ```contact_graspnet_ros2``` is put under ```~/graspnet_ws/src```
+- Assume repository ```contact_graspnet_ros2``` is put under ```~/graspnet_ws/src```
 
-2. **Setup Docker container**:
+#### 2. Setup Docker container:
 
-#### Locate the Docker files: 
+- **Locate the Docker files**: 
 Navigate to ```~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet_docker```
 
-#### Build the Docker image:
+- **Build the Docker image**:
 ```bash
 	docker build -t cuda118:contact_graspnet -f Dockerfile_CGN .
 ```
@@ -57,28 +57,28 @@ Alternatively, you may use the following command to pull the docker image for co
    docker pull zhaohuajing/cuda118:contact_graspnet
    ```
 
-####  Start the Docker container:  
+- **Start the Docker container**  
    ```bash
    ./run_docker.sh
    ```
 This script launches the Contact-GraspNet container with the proper environment and names it as: ```contact_graspnet_container```
 
 
-3. **Compile the ROS 2 package**:
+#### Compile the ROS 2 package:
 	```bash
 	cd ~/graspnet_ws
 	colcon build --symlink-install
 	source install/setup.bash
 	```
-4. **Test run of the ROS 2 server WITHOUT real-time inputs**
+#### Test run of the ROS 2 server WITHOUT real-time inputs
 
-#### Run the test ROS 2 server (in one terminal):
+- **Run the test ROS 2 server (in one terminal)**:
 
 	```bash
 	ros2 run contact_graspnet_ros2 grasp_executor_server
 	```
 	
-#### Run the test ROS 2 client (in another terminal):
+- **Run the test ROS 2 client (in another terminal)**:
 	```bash
 	ros2 run contact_graspnet_ros2 client_grasp_request <scene_name>
 	```
@@ -101,7 +101,7 @@ This repository provides **two complementary ROS 2 wrappers for Contact-GraspNet
  ### Real-time RGB-D Scene Integration (**Recommended**)
 We introduce a ROS 2 server, **`grasp_executor_rgbd_server`**, which enables Contact-GraspNet to operate directly on **live RGB-D scenes** (e.g., from Gazebo or a physical camera), instead of only static, pre-generated datasets.
 
-Key features:
+**Key features:**
 - ROS 2 service interface for grasp requests.
 - Converts live RGB-D inputs (and optional instance segmentation outputs) into Contact-GraspNet-compatible scene files.
 - Launches Contact-GraspNet inference **inside Docker via `subprocess`**, enabling:
@@ -110,7 +110,7 @@ Key features:
 - Parses inference outputs and returns grasp poses to ROS 2 clients for planning and execution.
 
 
-**Run the ROS 2 server with Live RGB-D inputs **
+**Run the ROS 2 server with Live RGB-D inputs**
 ```bash
 ros2 run contact_graspnet_ros2 grasp_executor_rgbd_server
 ```
