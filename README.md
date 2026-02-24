@@ -87,7 +87,7 @@ Navigate to `~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet_docker`
 	```bash
 	ros2 run contact_graspnet_ros2 client_grasp_request <scene_name>
 	```
-This requests grasps for test_data/<scene_name>.npy.
+This requests grasps for `~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/<scene_name>.npy`. Example <scene_name> can be 0, 1, ..., 13.
 
 
 #### Notes
