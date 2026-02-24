@@ -82,7 +82,7 @@ Once the container is running, simply leave that terminal open. No manual comman
 
 #### 4. Test run of the ROS 2 server WITHOUT real-time inputs:
 
-- Both server and client commands should run on the host machine (i.e., outside of the docker container).
+Both server and client commands should run on the host machine (i.e., outside of the docker container).
 
 - **Run the test ROS 2 server (in one terminal)**:
 
@@ -94,7 +94,7 @@ Once the container is running, simply leave that terminal open. No manual comman
 	```bash
 	ros2 run contact_graspnet_ros2 client_grasp_request <scene_name>
 	```
-This requests grasps for `~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/<scene_name>.npy`. Example <scene_name> can be 0, 1, ..., 13.
+This requests grasps for `~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/<scene_name>.npy`. Example `<scene_name>` can be `0`, `1`, ..., `13`.
 
 
 #### Notes
@@ -121,7 +121,25 @@ We introduce a ROS 2 server, **`grasp_executor_rgbd_server`**, which enables Con
 - Parses inference outputs and returns grasp poses to ROS 2 clients for planning and execution.
 
 
-**Run the ROS 2 server with Live RGB-D inputs**
+#### Test the scene integration server using local sample RGB-D inputs
+
+Both server and client commands should run on the host machine (i.e., outside of the docker container).
+
+- **Run the ROS 2 server for RGB-D inputs (in one terminal)**:
+
+	```bash
+	ros2 run contact_graspnet_ros2 grasp_executor_rgbd_server
+	```
+	
+- **Run the test ROS 2 client (in another terminal)**:
+	```bash
+	ros2 run contact_graspnet_ros2 client_grasp_request <scene_name>
+	```
+This requests grasps for `~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/sample_scene_ucn/<scene_name>.npy`. Example `<scene_name>` can be `scene_from_ucn`.
+
+
+#### Run the ROS 2 server with Live RGB-D inputs
+
 ```bash
 ros2 run contact_graspnet_ros2 grasp_executor_rgbd_server
 ```
