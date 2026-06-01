@@ -4,9 +4,11 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 # -------- paths --------
-# base = Path(".")  # adjust if needed
+base = Path(".")  # adjust if needed
+# pc_path = base / "scene_from_ucn.npy"
+# json_path = "../results/predictions_scene_from_ucn.json"
 pc_path = base / "scene_live.npy"
-json_path = base / "predictions_scene_live.json"
+json_path = "../results/predictions_scene_live.json"
 
 print("Loading:")
 print("  point cloud:", pc_path)
@@ -30,7 +32,7 @@ if pc_arr.ndim == 0 and hasattr(pc_arr, "item"):
         arr = np.asarray(d["pc"])
         pc_arr = arr[:, :3]
     else:
-        raise ValueError("Unsupported scene_live.npy format (no 'xyz' or 'pc' key).")
+        raise ValueError(f"Unsupported {pc_path} format (no 'xyz' or 'pc' key).")
 elif pc_arr.ndim == 2 and pc_arr.shape[1] > 3:
     pc_arr = pc_arr[:, :3]
 

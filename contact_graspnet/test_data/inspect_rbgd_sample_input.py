@@ -16,16 +16,19 @@ if zero.shape == ():
 else:
     print("0.npy shape:", zero.shape, "dtype:", zero.dtype)
 
-sample = np.load('./sample_scene_ucn/output/segmentation_from_rgbd/sample.npz')
+
+sample_path = './sample_scene_ucn/sample_3/output/segmentation_from_rgbd'
+
+sample = np.load(f'{sample_path}/sample.npz')
 print("sample.npz keys:", sample.files)
 for k in sample.files:
     arr = sample[k]
     print("  ", k, arr.shape, arr.dtype)
 
-im_label = np.load('./sample_scene_ucn/output/segmentation_from_rgbd/im_label.npy')
+im_label = np.load(f'{sample_path}/im_label.npy')
 print("im_label shape:", im_label.shape, "dtype:", im_label.dtype)
 
-with open('./sample_scene_ucn/output/segmentation_from_rgbd/segmentation.json') as f:
+with open(f'{sample_path}/segmentation.json') as f:
     seg_json = json.load(f)
 print("segmentation.json keys:", seg_json.keys())
 print("  num_objects:", seg_json.get("num_objects"))
@@ -34,6 +37,6 @@ obj = np.load('./0.npy', allow_pickle=True).item()
 print("0.npy depth range:", float(obj['depth'].min()), float(obj['depth'].max()))
 print("0.npy seg unique:", np.unique(obj['seg'])[:10])
 
-im_color_depth = np.load('./sample_scene_ucn/output/segmentation_from_rgbd/sample.npz')
+im_color_depth = np.load(f'{sample_path}/sample.npz')
 depth_ours = im_color_depth['depth'][0,0]  # guess first channel is depth?
 print("sample depth range:", float(depth_ours.min()), float(depth_ours.max()))

@@ -263,7 +263,7 @@ def parse_args() -> argparse.Namespace:
                         help="Path to RGB color PNG")
     parser.add_argument("--depth", type=str, default=f"{unseen_obj_clst_seg_path}/input/from_rgbd-depth.png",
                         help="Path to depth PNG (uint16 mm)")
-    parser.add_argument("--im_label", type=str, default=f"{unseen_obj_clst_seg_path}/output/segmentation_from_rgbd//segmentation_from_rgbd/im_label.npy",
+    parser.add_argument("--im_label", type=str, default=f"{unseen_obj_clst_seg_path}/output/segmentation_from_rgbd/segmentation_from_rgbd/im_label.npy",
                         help="Path to segmentation labels (H,W) int32")
     parser.add_argument("--seg_json", type=str, default=f"{unseen_obj_clst_seg_path}/output/segmentation_from_rgbd/segmentation.json",
                         help="Path to segmentation JSON (optional)")

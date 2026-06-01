@@ -5,7 +5,8 @@ from pathlib import Path
 
 # ---------- paths ----------
 # base = Path(".")  # adjust if needed
-base = Path("/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/samples_flexbe/Cam45_ViewFar5_wholeScene_filterZ0.28_Succ2/")
+base = Path("/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/") #samples_flexbe/Cam45_ViewFar5_wholeScene_filterZ0.28_Succ2/")
+# result_path = Path("/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/")
 pc_path = base / "scene_live.npy"
 json_path = base / "predictions_scene_live.json"
 
@@ -51,6 +52,7 @@ poses_list = []    # list of 4x4 np.array
 scores_list = []   # list of floats or None
 obj_ids_list = []  # list of ints
 
+# print(f"pred_grasps_cam.items() = {pred_grasps_cam.items()}")
 for obj_id_str, grasps_list in pred_grasps_cam.items():
     try:
         obj_id = int(obj_id_str)
@@ -104,7 +106,7 @@ else:
     pc_vis = pc_arr
 
 # Optionally downsample grasp frames for readability
-max_grasps_for_frames = 50  # tweak as needed
+max_grasps_for_frames = 10  # tweak as needed
 n_g = origins_f.shape[0]
 if n_g > max_grasps_for_frames:
     idx_g = np.random.choice(n_g, max_grasps_for_frames, replace=False)

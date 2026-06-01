@@ -30,45 +30,8 @@ class GraspServer(Node):
         self.result_loading = "_use_json"  # ["_use_json", "_use_npz"]
 
         # Frames
-        # Original simulation frames:
-        # self.base_frame = 'simple_pedestal' # 'panda_link0'  #'simple_workstation'  # 
-        # self.camera_frame = 'rgbd_camera/camera_link/rgbd_camera'
-
-        # GEN3/real-robot additions:
-        # Make the same server usable with the real Kinova camera/TF tree.
-        # Recommended starting values for your current Gen3 setup:
-        #   base_frame:=base_link
-        #   camera_frame:=camera_color_frame or camera_depth_frame, depending on TF and UCN output
-        # If camera_frame is an optical frame, set convert_cgn_optical_to_ros_camera_link:=False.
-        self.declare_parameter('base_frame', 'base_link')
-        self.declare_parameter('camera_frame', 'camera_color_frame')
-        self.declare_parameter('convert_cgn_optical_to_ros_camera_link', False)
-        self.declare_parameter('apply_gripper_frame_offset', False)
-        self.declare_parameter('gripper_offset_rx_deg', 0.0)
-        self.declare_parameter('gripper_offset_ry_deg', 0.0)
-        self.declare_parameter('gripper_offset_rz_deg', 0.0)
-        self.declare_parameter('apply_scene_replica_xy_swap', False)
-
-        self.base_frame = self.get_parameter('base_frame').value
-        self.camera_frame = self.get_parameter('camera_frame').value
-        self.convert_cgn_optical_to_ros_camera_link = bool(
-            self.get_parameter('convert_cgn_optical_to_ros_camera_link').value
-        )
-        self.apply_gripper_frame_offset = bool(
-            self.get_parameter('apply_gripper_frame_offset').value
-        )
-        self.apply_scene_replica_xy_swap = bool(
-            self.get_parameter('apply_scene_replica_xy_swap').value
-        )
-        self.gripper_offset_rx_deg = float(self.get_parameter('gripper_offset_rx_deg').value)
-        self.gripper_offset_ry_deg = float(self.get_parameter('gripper_offset_ry_deg').value)
-        self.gripper_offset_rz_deg = float(self.get_parameter('gripper_offset_rz_deg').value)
-
-        self.get_logger().info(
-            f'Using base_frame={self.base_frame}, camera_frame={self.camera_frame}, '
-            f'convert_cgn_optical_to_ros_camera_link={self.convert_cgn_optical_to_ros_camera_link}, '
-            f'apply_gripper_frame_offset={self.apply_gripper_frame_offset}'
-        )
+        self.base_frame = 'simple_pedestal' # 'panda_link0'  #'simple_workstation'  # 
+        self.camera_frame = 'rgbd_camera/camera_link/rgbd_camera'
 
         # TF2
         self.tf_buffer = tf2_ros.Buffer()
@@ -297,15 +260,7 @@ class GraspServer(Node):
 
             for T_cgn, score, sample in zip(T_list, obj_scores, obj_samples):
                 # 1) CGN optical frame -> ROS camera_link
-                # Original line:
-                # T_cam = self.cgn_optical_to_ros_cam(T_cgn)
-                # GEN3/real robot: make this configurable.
-                # Keep True when camera_frame is a ROS camera_link-like frame.
-                # Set False when camera_frame is already an optical frame.
-                if self.convert_cgn_optical_to_ros_camera_link:
-                    T_cam = self.cgn_optical_to_ros_cam(T_cgn)
-                else:
-                    T_cam = T_cgn
+                T_cam = self.cgn_optical_to_ros_cam(T_cgn)
 
 
                 # ----- NEW: constant “gripper frame” rotation offset -----
@@ -315,12 +270,7 @@ class GraspServer(Node):
                 #
                 # Start with identity; you can tune rx, ry, rz as needed.
                 # (values are in *degrees* here for convenience)
-                # Original hard-coded offset values:
-                # rx_deg, ry_deg, rz_deg = 0.0, 0.0, 0.0
-                # GEN3/real robot: expose them as ROS parameters for tuning.
-                rx_deg = self.gripper_offset_rx_deg
-                ry_deg = self.gripper_offset_ry_deg
-                rz_deg = self.gripper_offset_rz_deg
+                rx_deg, ry_deg, rz_deg = 0.0, 0.0, 0.0
                 rx, ry, rz = np.deg2rad([rx_deg, ry_deg, rz_deg])
 
                 # 4x4 homogeneous transform in the *grasp frame*:
@@ -337,20 +287,12 @@ class GraspServer(Node):
                     [0.,  0., 1., 0.],
                     [0.,  0., 0., 1.],
                 ])
-                # Original line:
-                # T_gripper_offset = T_gripper_offset @ swap_xy
-                # GEN3/real robot: make the SceneReplica-style X/Y swap optional.
-                if self.apply_scene_replica_xy_swap:
-                    T_gripper_offset = T_gripper_offset @ swap_xy
+                T_gripper_offset = T_gripper_offset @ swap_xy
 
                  # ----- NEW: apply constant gripper-frame rotation -----
                 # T_cam is (camera_link -> CGN_graspFrame).
                 # We want (camera_link -> robot_gripperFrame):
-                # Original line:
-                # T_cam = T_cam @ T_gripper_offset
-                # GEN3/real robot: allow disabling this for debugging raw CGN poses.
-                if self.apply_gripper_frame_offset:
-                    T_cam = T_cam @ T_gripper_offset
+                T_cam = T_cam @ T_gripper_offset
                 # ------------------------------------------------------
 
 

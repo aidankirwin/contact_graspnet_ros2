@@ -19,7 +19,7 @@ import tf_transformations as tfs
 from sensor_msgs.msg import CameraInfo
 
 
-class GraspServer(Node):
+class GraspCloudServer(Node):
     """
     ROS 2 service that runs Contact-GraspNet inference inside a Docker container.
     Accepts either a live Nx3 point cloud (flattened) or a scene_id referencing a sample .npy.
@@ -27,11 +27,11 @@ class GraspServer(Node):
     """
 
     def __init__(self):
-        super().__init__('grasp_server')
+        super().__init__('grasp_cloud_server')
 
         # ---------- Config ----------
         # Absolute service name avoids namespace discovery issues
-        self.srv = self.create_service(GetGrasps, '/get_grasps', self.handle_grasp_request)
+        self.srv = self.create_service(GetGrasps, '/get_grasps_cloud', self.handle_grasp_request)
 
         # Container + paths
         self.container_name = 'contact_graspnet_container'  # set to your container name
@@ -245,7 +245,7 @@ class GraspServer(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = GraspServer()
+    node = GraspCloudServer()
     try:
         rclpy.spin(node)
     finally:

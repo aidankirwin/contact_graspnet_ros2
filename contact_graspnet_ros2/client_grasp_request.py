@@ -11,7 +11,8 @@ class GraspClient(Node):
 
     def __init__(self):
         super().__init__('grasp_client')
-        self.client = self.create_client(GetGrasps, 'get_grasps')
+        # self.client = self.create_client(GetGrasps, 'get_grasps')
+        self.client = self.create_client(GetGrasps, 'get_grasps_rgbd')
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.get_logger().info('Service not available, waiting...')
 

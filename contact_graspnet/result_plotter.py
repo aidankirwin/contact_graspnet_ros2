@@ -22,6 +22,10 @@ npz_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet
 scene_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/scene_from_ucn.npy"
 save_image_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/scene_from_ucn_plot.png"
 
+# npz_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/predictions_0.npz"
+# scene_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/0.npy"
+# save_image_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/scene_0.png"
+
 
 # ------------------------------------------------------------------
 # Load predictions
@@ -83,6 +87,7 @@ for obj_id in grasps.keys():
 
     # Sort by score, highest first
     top_idxs = np.argsort(-sc)  # you can slice [:N] if you want fewer
+    top_idxs = top_idxs[:15]
 
     for i in top_idxs:
         g = g_mats[i]
@@ -93,6 +98,24 @@ for obj_id in grasps.keys():
         # IMPORTANT: do NOT paint_uniform_color here
         # so that X=red, Y=green, Z=blue remain intact.
         geometries.append(frame)
+
+# obj_id = 5.0
+# g_mats = grasps[obj_id]
+# sc = scores[obj_id]
+
+# # Sort by score, highest first
+# top_idxs = np.argsort(-sc)  # you can slice [:N] if you want fewer
+# top_idxs = top_idxs[:15]
+
+# for i in top_idxs:
+#     g = g_mats[i]
+#     T = np.eye(4)
+#     T[:4, :4] = g
+#     frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05)
+#     frame.transform(T)
+#     # IMPORTANT: do NOT paint_uniform_color here
+#     # so that X=red, Y=green, Z=blue remain intact.
+#     geometries.append(frame)
 
 
 # ------------------------------------------------------------------
@@ -113,10 +136,10 @@ def custom_draw(vis: o3d.visualization.Visualizer):
     #   - look at the point cloud center
     #   - front points roughly from +Y towards -Z (tweak if needed)
     #   - up is +Z
-    ctr.set_lookat([0, 0, 0.3])
-    ctr.set_front([0.1, -0.8, 1.0])  # direction camera looks towards
-    ctr.set_up([0, 0, -1])       # "up" direction
-    ctr.set_zoom(1)                 # zoom factor (tweak as needed)
+    # ctr.set_lookat([0, 0, 0.3])
+    # ctr.set_front([0.1, -0.8, 1.0])  # direction camera looks towards
+    # ctr.set_up([0, 0, -1])       # "up" direction
+    # ctr.set_zoom(1)                 # zoom factor (tweak as needed)
 
     vis.update_renderer()
     vis.capture_screen_image(save_image_path, do_render=True)
@@ -128,12 +151,12 @@ def custom_draw(vis: o3d.visualization.Visualizer):
 
 
 
-# o3d.visualization.draw_geometries(geometries)
+o3d.visualization.draw_geometries(geometries)
 
 # Render with our custom callback
-o3d.visualization.draw_geometries_with_animation_callback(
-    geometries,
-    custom_draw
-)
+# o3d.visualization.draw_geometries_with_animation_callback(
+#     geometries,
+#     custom_draw
+# )
 
 print(f"[INFO] Saved screenshot to: {save_image_path}")
