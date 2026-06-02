@@ -49,16 +49,6 @@ class GraspServer(Node):
         self.declare_parameter('gripper_offset_rz_deg', 0.0)
         self.declare_parameter('apply_scene_replica_xy_swap', False)
 
-        # GEN3/real-robot safety offset:
-        # The CGN pose is treated as an end_effector_link target in base_frame.
-        # On the real Robotiq gripper, the fingers can extend below/forward from
-        # end_effector_link and collide with the table. Add a small positive
-        # base-frame Z offset BEFORE returning poses to FlexBE/MoveToPose, so the
-        # arm never receives the too-low grasp pose. Tune from launch if needed.
-        # Original behavior: no Z offset.
-        # self.grasp_base_z_safety_offset = 0.0
-        self.declare_parameter('grasp_base_z_safety_offset', 0.04)
-
         self.base_frame = self.get_parameter('base_frame').value
         self.camera_frame = self.get_parameter('camera_frame').value
         self.convert_cgn_optical_to_ros_camera_link = bool(
@@ -73,15 +63,11 @@ class GraspServer(Node):
         self.gripper_offset_rx_deg = float(self.get_parameter('gripper_offset_rx_deg').value)
         self.gripper_offset_ry_deg = float(self.get_parameter('gripper_offset_ry_deg').value)
         self.gripper_offset_rz_deg = float(self.get_parameter('gripper_offset_rz_deg').value)
-        self.grasp_base_z_safety_offset = float(
-            self.get_parameter('grasp_base_z_safety_offset').value
-        )
 
         self.get_logger().info(
             f'Using base_frame={self.base_frame}, camera_frame={self.camera_frame}, '
             f'convert_cgn_optical_to_ros_camera_link={self.convert_cgn_optical_to_ros_camera_link}, '
-            f'apply_gripper_frame_offset={self.apply_gripper_frame_offset}, '
-            f'grasp_base_z_safety_offset={self.grasp_base_z_safety_offset:.3f} m'
+            f'apply_gripper_frame_offset={self.apply_gripper_frame_offset}'
         )
 
         # TF2
@@ -415,36 +401,11 @@ class GraspServer(Node):
         if grasps_in_base_pa.poses:
             zs_base = [p.position.z for p in grasps_in_base_pa.poses]
             self.get_logger().info(
-                f"Base-frame grasp Z range before safety offset: "
-                f"[{min(zs_base):.3f}, {max(zs_base):.3f}]"
+                f"Base-frame grasp Z range:   [{min(zs_base):.3f}, {max(zs_base):.3f}]"
             )
 
         # ---------------------------------------------------
-        # GEN3/real-robot safety offset in base-frame +Z
-        # ---------------------------------------------------
-        # Proper location for the first safety correction:
-        #   after camera->base TF, before filling response.grasps.
-        # This means FlexBE and MoveToPose receive the lifted pose directly.
-        # It avoids sending a low raw CGN pose to /move_to_pose first.
-        if grasps_in_base_pa.poses and abs(self.grasp_base_z_safety_offset) > 1e-9:
-            for p in grasps_in_base_pa.poses:
-                # Original behavior:
-                # p.position.z = p.position.z
-                p.position.z += self.grasp_base_z_safety_offset
-
-                if p.position.z < 0.12:
-                    p.position.z = 0.12
-
-
-            zs_base_offset = [p.position.z for p in grasps_in_base_pa.poses]
-            self.get_logger().info(
-                f"Applied base-frame +Z safety offset: "
-                f"{self.grasp_base_z_safety_offset:.3f} m; "
-                f"Z range after offset: [{min(zs_base_offset):.3f}, {max(zs_base_offset):.3f}]"
-            )
-
-        # ---------------------------------------------------
-        # Fill Grasps msg (poses now in base frame, with optional safety offset)
+        # Fill Grasps msg (poses now in base frame)
         # ---------------------------------------------------
         grasps_msg = Grasps()
         grasps_msg.poses = list(grasps_in_base_pa.poses)
