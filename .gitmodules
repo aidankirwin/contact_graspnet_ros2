@@ -1,3 +1,0 @@
-[submodule "contact_graspnet_docker/contact_graspnet_docker"]
-	path = contact_graspnet_docker/contact_graspnet_docker
-	url = https://github.com/zhaohuajing/contact_graspnet_docker.git
