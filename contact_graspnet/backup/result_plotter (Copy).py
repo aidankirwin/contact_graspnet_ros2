@@ -19,7 +19,7 @@ def depth_to_point_cloud(depth, K):
 # Paths (adjust as you like)
 # ------------------------------------------------------------------
 npz_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/predictions_scene_from_ucn.npz"
-scene_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/scene_from_ucn.npy"
+scene_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/scene_from_ucn.npy"
 save_image_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/scene_from_ucn_plot.png"
 
 # npz_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/predictions_0.npz"
@@ -85,14 +85,10 @@ for obj_id in grasps.keys():
     g_mats = grasps[obj_id]
     sc = scores[obj_id]
 
-    if len(g_mats) == 0 or len(sc) == 0:
-        print(f"[WARN] object {obj_id} has zero predicted grasps; skipping visualization for this object.")
-        continue
-
     # Sort by score, highest first
     top_idxs = np.argsort(-sc)  # you can slice [:N] if you want fewer
     # top_idxs = top_idxs[:15]
-    top_idxs = top_idxs[:15] # only plot top 1 grasp
+    top_idxs = top_idxs[:1] # only plot top 1 grasp
 
     for i in top_idxs:
         g = g_mats[i]

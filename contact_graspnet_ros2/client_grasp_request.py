@@ -19,7 +19,7 @@ class GraspClient(Node):
         self.base_path = os.path.expanduser('~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet')
         self.scene_name = sys.argv[1]
 
-        npy_path = os.path.join(self.base_path, "test_data", f"{self.scene_name}.npy") 
+        npy_path = os.path.join(self.base_path, "results", f"{self.scene_name}.npy") 
         depth, K, seg = self.load_npy_file(npy_path)
         points = self.depth_to_point_cloud(depth, K)
         mask = self.flatten_segmentation(seg)
