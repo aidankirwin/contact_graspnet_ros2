@@ -1,4 +1,4 @@
-FROM docker.io/library/ros:humble-ros-base
+FROM ros:humble-ros-base
 
 # ============================================================
 # Environment
