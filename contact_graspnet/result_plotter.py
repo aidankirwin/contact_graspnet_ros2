@@ -15,6 +15,40 @@ def depth_to_point_cloud(depth, K):
     return np.stack((X, Y, Z), axis=-1)
 
 
+def make_faded_axis_lines(T, size=0.025):
+    """
+    Make a small, faded-looking coordinate-frame line set.
+
+    Open3D's legacy draw_geometries() does not reliably support alpha
+    transparency for these simple geometries, so the non-top grasp frames are
+    drawn smaller with lighter RGB colors to visually de-emphasize them.
+    """
+    T = np.asarray(T, dtype=np.float64)
+    origin = T[:3, 3]
+    x_end = origin + size * T[:3, 0]
+    y_end = origin + size * T[:3, 1]
+    z_end = origin + size * T[:3, 2]
+
+    line_set = o3d.geometry.LineSet()
+    line_set.points = o3d.utility.Vector3dVector(
+        np.vstack([origin, x_end, y_end, z_end])
+    )
+    line_set.lines = o3d.utility.Vector2iVector(
+        np.array([[0, 1], [0, 2], [0, 3]], dtype=np.int32)
+    )
+
+    # Faded red/green/blue axis colors. This approximates "half transparent"
+    # while staying compatible with Open3D's default legacy visualizer.
+    line_set.colors = o3d.utility.Vector3dVector(
+        np.array([
+            [0.70, 0.35, 0.35],  # faded X/red
+            [0.35, 0.70, 0.35],  # faded Y/green
+            [0.35, 0.35, 0.70],  # faded Z/blue
+        ], dtype=np.float64)
+    )
+    return line_set
+
+
 # ------------------------------------------------------------------
 # Paths (adjust as you like)
 # ------------------------------------------------------------------
@@ -22,9 +56,13 @@ npz_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet
 scene_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/scene_from_ucn.npy"
 save_image_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/scene_from_ucn_plot.png"
 
-# npz_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/predictions_0.npz"
-# scene_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/0.npy"
-# save_image_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/results/scene_0.png"
+# ------------------------------------------------------------------
+# Visualization options
+# ------------------------------------------------------------------
+MAX_GRASPS_PER_OBJECT = 15
+TOP_FRAME_SIZE = 0.060
+OTHER_FRAME_SIZE = 0.025
+SHOW_OTHER_GRASPS = True
 
 
 # ------------------------------------------------------------------
@@ -78,49 +116,49 @@ geometries = [pcd_cropped]
 
 
 # ------------------------------------------------------------------
-# Add coordinate frames for predicted grasps
-# (X=red, Y=green, Z=blue by default in Open3D)
+# Add coordinate frames for predicted grasps.
+#
+# Top grasp:
+#   - full Open3D coordinate frame, normal size/color
+# Other high-score grasps:
+#   - smaller, faded-looking line frames
+#
+# The list is sorted by score descending for visualization, so index 0 in
+# ordered_idxs is the highest-score grasp for that object.
 # ------------------------------------------------------------------
 for obj_id in grasps.keys():
     g_mats = grasps[obj_id]
-    sc = scores[obj_id]
+    sc = np.asarray(scores[obj_id], dtype=np.float64)
 
     if len(g_mats) == 0 or len(sc) == 0:
         print(f"[WARN] object {obj_id} has zero predicted grasps; skipping visualization for this object.")
         continue
 
-    # Sort by score, highest first
-    top_idxs = np.argsort(-sc)  # you can slice [:N] if you want fewer
-    # top_idxs = top_idxs[:15]
-    top_idxs = top_idxs[:15] # only plot top 1 grasp
+    ordered_idxs = np.argsort(-sc)
+    ordered_idxs = ordered_idxs[:min(MAX_GRASPS_PER_OBJECT, len(ordered_idxs))]
 
-    for i in top_idxs:
-        g = g_mats[i]
-        T = np.eye(4)
-        T[:4, :4] = g
-        frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05)
-        frame.transform(T)
-        # IMPORTANT: do NOT paint_uniform_color here
-        # so that X=red, Y=green, Z=blue remain intact.
-        geometries.append(frame)
+    if len(ordered_idxs) == 0:
+        continue
 
-# obj_id = 5.0
-# g_mats = grasps[obj_id]
-# sc = scores[obj_id]
+    top_idx = int(ordered_idxs[0])
+    top_T = np.eye(4)
+    top_T[:4, :4] = np.asarray(g_mats[top_idx], dtype=np.float64)
 
-# # Sort by score, highest first
-# top_idxs = np.argsort(-sc)  # you can slice [:N] if you want fewer
-# top_idxs = top_idxs[:15]
+    top_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=TOP_FRAME_SIZE)
+    top_frame.transform(top_T)
+    geometries.append(top_frame)
 
-# for i in top_idxs:
-#     g = g_mats[i]
-#     T = np.eye(4)
-#     T[:4, :4] = g
-#     frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.05)
-#     frame.transform(T)
-#     # IMPORTANT: do NOT paint_uniform_color here
-#     # so that X=red, Y=green, Z=blue remain intact.
-#     geometries.append(frame)
+    print(
+        f"[INFO] Object {obj_id}: top grasp index={top_idx}, "
+        f"score={float(sc[top_idx]):.6f}; showing {len(ordered_idxs)} grasps total."
+    )
+
+    if SHOW_OTHER_GRASPS:
+        for idx in ordered_idxs[1:]:
+            idx = int(idx)
+            T = np.eye(4)
+            T[:4, :4] = np.asarray(g_mats[idx], dtype=np.float64)
+            geometries.append(make_faded_axis_lines(T, size=OTHER_FRAME_SIZE))
 
 
 # ------------------------------------------------------------------
@@ -144,16 +182,14 @@ def custom_draw(vis: o3d.visualization.Visualizer):
     # ctr.set_lookat([0, 0, 0.3])
     # ctr.set_front([0.1, -0.8, 1.0])  # direction camera looks towards
     # ctr.set_up([0, 0, -1])       # "up" direction
-    # ctr.set_zoom(1)                 # zoom factor (tweak as needed)
+    # ctr.set_zoom(1)              # zoom factor (tweak as needed)
 
     vis.update_renderer()
     vis.capture_screen_image(save_image_path, do_render=True)
-    
 
     # Return False to stop after one frame,
     # or True if you want the window to stay interactive.
     return True
-
 
 
 o3d.visualization.draw_geometries(geometries)
