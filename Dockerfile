@@ -1,116 +1,117 @@
-# Base image: CUDA 11.8 with cuDNN 8 on Ubuntu 22.04 (includes dev‑tools)
-FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
+FROM ros:humble-ros-base
 
-# NOTE: To build docker, run: "docker build -t cuda118:contact_graspnet -f Dockerfile_CGN ."
+# ============================================================
+# Environment
+# ============================================================
 
-# Remove dangling images left from previous builds
-docker image prune -f
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    ROS_DISTRO=humble
 
-# Force Qt (used by Mayavi/VTK) into offscreen rendering mode
-ENV QT_QPA_PLATFORM=offscreen
+ARG USER_UID=1001
+ARG USER_GID=1001
+ARG USERNAME=user
 
-# Install system utilities
-RUN apt-get update && apt-get install -y \
-        wget \
+WORKDIR /cgn_ros2_ws
+
+# ============================================================
+# Basic development tools
+# ============================================================
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        bash-completion \
+        curl \
         git \
-        libxrender1 \
-        mesa-common-dev \
-        tree \
+        nano \
+        vim \
+        gdb \
         sudo \
+        iputils-ping \
+        openssh-client \
+        python3-pip \
+        python3-colcon-common-extensions \
+        python3-colcon-argcomplete \
+        libudev-dev \
+        udev \
+        usbutils \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 
-# Install Sublime Text: Install prerequisites first
-RUN apt-get update && apt-get install -y wget gnupg2 apt-transport-https ca-certificates
-# Add Sublime Text GPG key
-RUN wget -qO - https://download.sublimetext.com/sublimehq-pub.gpg | gpg --dearmor > /usr/share/keyrings/sublimehq-archive-keyring.gpg
-# Add Sublime Text repository
-RUN echo "deb [signed-by=/usr/share/keyrings/sublimehq-archive-keyring.gpg] https://download.sublimetext.com/ apt/stable/" \
-    > /etc/apt/sources.list.d/sublime-text.list
-# Install Sublime Text
-RUN apt-get update && apt-get install -y sublime-text
+# ============================================================
+# X11 / OpenGL
+# ============================================================
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        xauth \
+        x11-apps \
+        mesa-utils \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*s
 
 
-# Set up Miniconda installation directory
-ENV CONDA_DIR=/opt/conda \
-    PATH=/opt/conda/bin:$PATH
+# ============================================================
+# ROS 2 Python / GUI dependencies
+# ============================================================
 
-# Download and install Miniconda
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
-         -O /tmp/miniconda.sh \
-    && bash /tmp/miniconda.sh -b -p $CONDA_DIR \
-    && rm /tmp/miniconda.sh \
-    && conda init bash \
-    && conda config --system --set auto_activate_base false
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        ros-humble-ros-gz \
+        ros-humble-ros-gz-interfaces \
+        ros-humble-rclpy \
+        ros-humble-std-msgs \
+        ros-humble-geometry-msgs \
+        ros-humble-sensor-msgs \
+        ros-humble-visualization-msgs \
+        ros-humble-tf2 \
+        ros-humble-tf2-ros \
+        ros-humble-tf2-geometry-msgs \
+        ros-humble-moveit \
+        ros-humble-moveit-ros-move-group \
+        ros-humble-moveit-kinematics \
+        ros-humble-moveit-planners-ompl \
+        ros-humble-moveit-ros-visualization \
+        ros-humble-moveit-simple-controller-manager \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Use bash login shell so that .bashrc (with conda init) is sourced
-SHELL ["/bin/bash", "-lc"]
-
-# WORKDIR /workspace/contact_graspnet
-WORKDIR /root/graspnet_ws
-
-
-# Clone the Contact-GraspNet source
-# RUN git clone https://github.com/JohnBrann/contact_graspnet .
-
-# Remove the mayavi pin from environment.yaml (we'll install via conda-forge)
-RUN sed -i '/mayavi==/d' environment.yaml
-
-# added: Accept ToS inside Dockerfile
-RUN conda config --add channels defaults && \
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
-    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
-
-# Build the conda env and install extras: 
-RUN conda env create -f environment.yaml \
-    && conda install -n contact-graspnet -c conda-forge vtk mayavi matplotlib -y \
-    && conda install -n contact-graspnet numpy=1.23.5 -y \
-    && conda run -n contact-graspnet pip install --no-cache-dir pyyaml==5.3.1
-
-# added: Install EGL/OSMesa support inside the Dockerfile
+# ============================================================
+# Docker CLI (hopefully temporary, I'm undecided about the DiD model)
+# ============================================================
 RUN apt-get update && apt-get install -y \
-    libosmesa6-dev libglu1-mesa-dev freeglut3-dev mesa-utils \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
-# Install required Python packages for ROS 2 compatibility
-RUN /opt/conda/envs/contact-graspnet/bin/pip install \
-    empy==3.3.4 \
-    lark-parser \
-    setuptools==58.0.4 \
-    catkin_pkg \
-    rospkg
+# ============================================================
+# User configuration
+# ============================================================
 
-# added (temp: Dockerfile-based installation not tested) Install ROS 2 Humble base + build tools
-# Set environment variables for non-interactive install
-ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=UTC
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME \
+    && mkdir -p -m 0700 /run/user/"${USER_UID}" \
+    && mkdir -p -m 0700 /run/user/"${USER_UID}"/gdm \
+    && chown -R $USERNAME:$USERNAME /run/user/"${USER_UID}" \
+    && chown $USERNAME:$USERNAME /cgn_ros2_ws
 
-# Install basic dependencies and ROS 2 Humble
-RUN apt update && apt install -y \
-    curl \
-    gnupg \
-    lsb-release \
-    locales \
-    && locale-gen en_US en_US.UTF-8 \
-    && update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-    && export LANG=en_US.UTF-8 \
-    && curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | apt-key add - \
-    && echo "deb [arch=amd64] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" > /etc/apt/sources.list.d/ros2-latest.list \
-    && apt update && apt install -y \
-    ros-humble-desktop \
-    python3-colcon-common-extensions \
-    python3-pip \
-    python3-vcstool \
-    python3-rosdep \
-    build-essential \
-    git \
-    && rosdep init && rosdep update
+ENV XDG_RUNTIME_DIR=/run/user/"${USER_UID}"
+RUN echo "user soft rtprio 99" >> /etc/security/limits.conf
+RUN echo "user hard rtprio 99" >> /etc/security/limits.conf
+RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /home/$USERNAME/.bashrc \
+    && echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/$USERNAME/.bashrc
 
+# ============================================================
+# Workspace
+# ============================================================
 
-# Source ROS 2 setup in every shell
-RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
+USER root
+COPY . /cgn_ros2_ws/src
+RUN sudo chown -R $USERNAME:$USERNAME /cgn_ros2_ws
 
-# RUN echo "conda activate contact-graspnet" >> ~/.bashrc
-
-# Default to an interactive bash login shell
-CMD ["bash", "-l"]
+SHELL ["/bin/bash", "-c"]
+CMD ["/bin/bash"]
+WORKDIR /cgn_ros2_ws
