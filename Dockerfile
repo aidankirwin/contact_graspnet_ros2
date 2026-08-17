@@ -99,8 +99,8 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && chown $USERNAME:$USERNAME /cgn_ros2_ws
 
 ENV XDG_RUNTIME_DIR=/run/user/"${USER_UID}"
-RUN echo "user soft rtprio 99" >> /etc/security/limits.conf
-RUN echo "user hard rtprio 99" >> /etc/security/limits.conf
+# RUN echo "user soft rtprio 99" >> /etc/security/limits.conf
+# RUN echo "user hard rtprio 99" >> /etc/security/limits.conf
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /home/$USERNAME/.bashrc \
     && echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/$USERNAME/.bashrc
 
@@ -110,7 +110,7 @@ RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /home/$USERNAME/.bashrc \
 
 USER root
 COPY . /cgn_ros2_ws/src
-RUN sudo chown -R $USERNAME:$USERNAME /cgn_ros2_ws
+# RUN sudo chown -R $USERNAME:$USERNAME /cgn_ros2_ws
 
 SHELL ["/bin/bash", "-c"]
 CMD ["/bin/bash"]
