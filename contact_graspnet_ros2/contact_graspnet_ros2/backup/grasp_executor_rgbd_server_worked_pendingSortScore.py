@@ -68,15 +68,12 @@ class GraspServer(Node):
         # arm never receives the too-low grasp pose. Tune from launch if needed.
         # Original behavior: no Z offset.
         # self.grasp_base_z_safety_offset = 0.0
-        self.declare_parameter('grasp_base_z_safety_offset', 0.010)
+        self.declare_parameter('grasp_base_z_safety_offset', 0.0)
         self.declare_parameter('base_x_offset', 0)
         self.declare_parameter('base_y_offset', 0.018)
         self.declare_parameter('strict_scene_mask_filter', True)
         self.declare_parameter('mask_projection_radius_px', 8)
         self.declare_parameter('max_contact_to_mask_dist_m', 0.035)
-        # Keep returned grasps, scores, samples, and object_ids aligned, ordered
-        # from highest Contact-GraspNet score to lowest before sending to FlexBE.
-        self.declare_parameter('sort_grasps_by_score', True)
 
         self.base_frame = self.get_parameter('base_frame').value
         self.camera_frame = self.get_parameter('camera_frame').value
@@ -100,7 +97,6 @@ class GraspServer(Node):
         self.strict_scene_mask_filter = bool(self.get_parameter('strict_scene_mask_filter').value)
         self.mask_projection_radius_px = int(self.get_parameter('mask_projection_radius_px').value)
         self.max_contact_to_mask_dist_m = float(self.get_parameter('max_contact_to_mask_dist_m').value)
-        self.sort_grasps_by_score = bool(self.get_parameter('sort_grasps_by_score').value)
 
         self.get_logger().info(
             f'Using base_frame={self.base_frame}, camera_frame={self.camera_frame}, '
@@ -113,8 +109,7 @@ class GraspServer(Node):
             f"CGN input settings: scene_input_dir='{self.scene_input_dir}', "
             f"cgn_k_path='{self.cgn_k_path}', "
             f"retry_without_filter_if_empty={self.retry_without_filter_if_empty}, "
-            f"strict_scene_mask_filter={self.strict_scene_mask_filter}, "
-            f"sort_grasps_by_score={self.sort_grasps_by_score}"
+            f"strict_scene_mask_filter={self.strict_scene_mask_filter}"
         )
 
         # TF2
@@ -706,33 +701,6 @@ class GraspServer(Node):
                 f"{self.grasp_base_z_safety_offset:.3f} m; "
                 f"Z range after offset: [{min(zs_base_offset):.3f}, {max(zs_base_offset):.3f}]"
             )
-
-        # ---------------------------------------------------
-        # Sort output candidates by Contact-GraspNet score
-        # ---------------------------------------------------
-        if self.sort_grasps_by_score and grasps_in_base_pa.poses:
-            if not (len(grasps_in_base_pa.poses) == len(score_list) == len(sample_list) == len(object_list)):
-                self.get_logger().warn(
-                    "Cannot sort grasps by score because list lengths are inconsistent: "
-                    f"poses={len(grasps_in_base_pa.poses)}, scores={len(score_list)}, "
-                    f"samples={len(sample_list)}, object_ids={len(object_list)}"
-                )
-            else:
-                order = sorted(
-                    range(len(score_list)),
-                    key=lambda i: float(score_list[i]),
-                    reverse=True
-                )
-                grasps_in_base_pa.poses = [grasps_in_base_pa.poses[i] for i in order]
-                score_list = [float(score_list[i]) for i in order]
-                sample_list = [sample_list[i] for i in order]
-                object_list = [int(object_list[i]) for i in order]
-
-                top_preview = ", ".join(f"{s:.4f}" for s in score_list[:5])
-                self.get_logger().info(
-                    "Sorted returned grasps by score in descending order "
-                    f"(highest first). Top scores: [{top_preview}]"
-                )
 
         # ---------------------------------------------------
         # Fill Grasps msg (poses now in base frame, with optional safety offset)

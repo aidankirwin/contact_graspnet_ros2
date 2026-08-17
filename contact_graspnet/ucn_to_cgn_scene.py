@@ -246,6 +246,7 @@ def build_scene_from_ucn(
         "seg": seg.astype(np.float32),
     }
 
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     np.save(out_path, scene)
     print(f"[INFO] Saved scene dict to {out_path}")
     return scene
@@ -256,28 +257,28 @@ def parse_args() -> argparse.Namespace:
         description="Convert UCN outputs + RGBD into Contact-GraspNet-style scene_from_ucn.npy"
     )
 
-    unseen_obj_clst_seg_path = "/home/csrobot/graspnet_ws/src/unseen_obj_clst_ros2/compare_UnseenObjectClustering/segmentation_rgbd/"
-    cgn_data_path = "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data/"
+    unseen_obj_clst_seg_path = os.path.expanduser("~/graspnet_ws/src/unseen_obj_clst_ros2/compare_UnseenObjectClustering/results/segmentation_rgbd") # "/home/csrobot/graspnet_ws/src/unseen_obj_clst_ros2/compare_UnseenObjectClustering/results/segmentation_rgbd"
+    cgn_data_path = os.path.expanduser("~/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet") # "/home/csrobot/graspnet_ws/src/contact_graspnet_ros2/contact_graspnet/test_data"
 
     parser.add_argument("--rgb", type=str, default=f"{unseen_obj_clst_seg_path}/input/from_rgbd-color.png",
                         help="Path to RGB color PNG")
     parser.add_argument("--depth", type=str, default=f"{unseen_obj_clst_seg_path}/input/from_rgbd-depth.png",
                         help="Path to depth PNG (uint16 mm)")
-    parser.add_argument("--im_label", type=str, default=f"{unseen_obj_clst_seg_path}/output/segmentation_from_rgbd/segmentation_from_rgbd/im_label.npy",
+    parser.add_argument("--im_label", type=str, default=f"{unseen_obj_clst_seg_path}/output/im_label.npy",
                         help="Path to segmentation labels (H,W) int32")
-    parser.add_argument("--seg_json", type=str, default=f"{unseen_obj_clst_seg_path}/output/segmentation_from_rgbd/segmentation.json",
+    parser.add_argument("--seg_json", type=str, default=f"{unseen_obj_clst_seg_path}/output/segmentation.json",
                         help="Path to segmentation JSON (optional)")
 
-    parser.add_argument("--fx", type=float, default= 615.0, #required=True,
+    parser.add_argument("--fx", type=float, default=648.83642578125, # required=True,
                         help="Camera focal length fx")
-    parser.add_argument("--fy", type=float, default= 615.0, #required=True,
+    parser.add_argument("--fy", type=float, default=649.315673828125, # required=True,
                         help="Camera focal length fy")
-    parser.add_argument("--cx", type=float, default= 320.0, #required=True,
+    parser.add_argument("--cx", type=float, default=310.4570007324219, # required=True,
                         help="Principal point cx")
-    parser.add_argument("--cy", type=float, default= 240.0, #required=True,
+    parser.add_argument("--cy", type=float, default=119.1401596069336, # required=True,
                         help="Principal point cy")
 
-    parser.add_argument("--out_scene", type=str, default=f"{cgn_data_path}/scene_from_ucn.npy",
+    parser.add_argument("--out_scene", type=str, default=f"{cgn_data_path}/results/scene_from_ucn.npy",
                         help="Output .npy path for scene dict")
 
     parser.add_argument("--dump_cloud", action="store_true",
