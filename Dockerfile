@@ -1,5 +1,5 @@
 # Use CUDA 11.8 devel on Ubuntu 22.04 (Compatible with both 2080Ti and 4090 hardware)
-FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
+FROM docker.io/nvidia/cuda:11.8.0-devel-ubuntu22.04
 
 # Prevent interactive configuration screens
 ENV DEBIAN_FRONTEND=noninteractive
