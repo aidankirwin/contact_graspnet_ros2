@@ -1,117 +1,72 @@
-FROM docker.io/library/ros:humble-ros-base
+# Use CUDA 11.8 devel on Ubuntu 22.04 (Compatible with both 2080Ti and 4090 hardware)
+FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 
-# ============================================================
-# Environment
-# ============================================================
+# Prevent interactive configuration screens
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
-    ROS_DISTRO=humble
-
-ARG USER_UID=1001
-ARG USER_GID=1001
-ARG USERNAME=user
-
-WORKDIR /cgn_ros2_ws
-
-# ============================================================
-# Basic development tools
-# ============================================================
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        bash-completion \
-        curl \
-        git \
-        nano \
-        vim \
-        gdb \
-        sudo \
-        iputils-ping \
-        openssh-client \
-        python3-pip \
-        python3-colcon-common-extensions \
-        python3-colcon-argcomplete \
-        libudev-dev \
-        udev \
-        usbutils \
-    && apt-get clean \
+# Install baseline OS packages, build utilities, and required GUI/X11 libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    wget \
+    curl \
+    software-properties-common \
+    libgl1-mesa-glx \
+    libegl1-mesa \
+    libgles2-mesa \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libxt6 \
+    python3-pip \
+    python3-dev \
+    python3-setuptools \
+    python3-wheel \
     && rm -rf /var/lib/apt/lists/*
 
+# Add OSRF ROS 2 official secure keys and package index sources
+RUN curl -sSL https://githubusercontent.com -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://ros.org $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
-# ============================================================
-# X11 / OpenGL
-# ============================================================
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        xauth \
-        x11-apps \
-        mesa-utils \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*s
-
-
-# ============================================================
-# ROS 2 Python / GUI dependencies
-# ============================================================
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        ros-humble-ros-gz \
-        ros-humble-ros-gz-interfaces \
-        ros-humble-rclpy \
-        ros-humble-std-msgs \
-        ros-humble-geometry-msgs \
-        ros-humble-sensor-msgs \
-        ros-humble-visualization-msgs \
-        ros-humble-tf2 \
-        ros-humble-tf2-ros \
-        ros-humble-tf2-geometry-msgs \
-        ros-humble-moveit \
-        ros-humble-moveit-ros-move-group \
-        ros-humble-moveit-kinematics \
-        ros-humble-moveit-planners-ompl \
-        ros-humble-moveit-ros-visualization \
-        ros-humble-moveit-simple-controller-manager \
-    && apt-get clean \
+# Install complete ROS 2 Humble Desktop alongside build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-desktop \
+    python3-colcon-common-extensions \
     && rm -rf /var/lib/apt/lists/*
 
-# ============================================================
-# Docker CLI (hopefully temporary, I'm undecided about the DiD model)
-# ============================================================
-RUN apt-get update && apt-get install -y \
-    docker.io \
-    && rm -rf /var/lib/apt/lists/*
+# Upgrade packaging managers
+RUN python3 -m pip install --no-cache-dir --upgrade pip
 
-# ============================================================
-# User configuration
-# ============================================================
+# Install common unified Python ML / Geometric stack
+RUN python3 -m pip install --no-cache-dir \
+    tensorflow==2.12.0 \
+    numpy==1.23.5 \
+    scipy==1.10.1 \
+    matplotlib==3.7.1 \
+    trimesh==3.21.5 \
+    h5py==3.8.0 \
+    opencv-python==4.7.0.72 \
+    pyyaml==6.0 \
+    tqdm==4.65.0 \
+    shapely==2.0.1 \
+    pyrender==0.1.43 \
+    python-fcl==0.0.12 \
+    imageio==2.28.1
 
-RUN groupadd --gid $USER_GID $USERNAME \
-    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
-    && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME \
-    && mkdir -p -m 0700 /run/user/"${USER_UID}" \
-    && mkdir -p -m 0700 /run/user/"${USER_UID}"/gdm \
-    && chown -R $USERNAME:$USERNAME /run/user/"${USER_UID}" \
-    && chown $USERNAME:$USERNAME /cgn_ros2_ws
 
-ENV XDG_RUNTIME_DIR=/run/user/"${USER_UID}"
-# RUN echo "user soft rtprio 99" >> /etc/security/limits.conf
-# RUN echo "user hard rtprio 99" >> /etc/security/limits.conf
-RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /home/$USERNAME/.bashrc \
-    && echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash" >> /home/$USERNAME/.bashrc
+# CRITICAL STEP FOR MULTI-GPU MACHINES:
+# Intercept and modify compile script to build universal binary payloads (Fat Binaries)
+# Maps Turing (arch=sm_75) for 2080Ti and Ada Lovelace (arch=sm_89) for 4090.
+WORKDIR /cgn_ws/contact_graspnet_ros2/contact_graspnet_ros2/contact_graspnet/pointnet2/tf_ops
+RUN sed -i 's/-arch=sm_35/-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_89,code=sm_89/g' compile_pointnet_tfops.sh && \
+    chmod +x compile_pointnet_tfops.sh && \
+    ./compile_pointnet_tfops.sh || true
 
-# ============================================================
-# Workspace
-# ============================================================
+# Global terminal environment variables hook setup
+RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
 
-USER root
-COPY . /cgn_ros2_ws/src
-# RUN sudo chown -R $USERNAME:$USERNAME /cgn_ros2_ws
-
-SHELL ["/bin/bash", "-c"]
-CMD ["/bin/bash"]
-WORKDIR /cgn_ros2_ws
+WORKDIR /cgn_ws
+CMD ["bash"]
