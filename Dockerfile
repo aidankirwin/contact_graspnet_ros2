@@ -60,7 +60,7 @@ RUN python3 -m pip install --no-cache-dir \
 # CRITICAL STEP FOR MULTI-GPU MACHINES:
 # Intercept and modify compile script to build universal binary payloads (Fat Binaries)
 # Maps Turing (arch=sm_75) for 2080Ti and Ada Lovelace (arch=sm_89) for 4090.
-WORKDIR /cgn_ws/contact_graspnet_ros2/contact_graspnet_ros2/contact_graspnet/pointnet2/tf_ops
+WORKDIR /cgn_ws/contact_graspnet_ros2/contact_graspnet/pointnet2/tf_ops
 RUN sed -i 's/-arch=sm_35/-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_89,code=sm_89/g' compile_pointnet_tfops.sh && \
     chmod +x compile_pointnet_tfops.sh && \
     ./compile_pointnet_tfops.sh || true

@@ -53,35 +53,42 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/pythonpath.dsv
 # )
 
 # --- Install your ROS 2 python nodes as executables ---
+
+install(PROGRAMS
+  contact_graspnet_ros2/grasp_processor.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME grasp_processor
+)
+
 # install(PROGRAMS
 #   contact_graspnet_ros2/grasp_server.py
 #   DESTINATION lib/${PROJECT_NAME}
 #   RENAME grasp_server
 # )
 
-install(PROGRAMS
-  contact_graspnet_ros2/client_grasp_request.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME client_grasp_request
-)
+# install(PROGRAMS
+#   contact_graspnet_ros2/client_grasp_request.py
+#   DESTINATION lib/${PROJECT_NAME}
+#   RENAME client_grasp_request
+# )
 
-install(PROGRAMS
-  contact_graspnet_ros2/grasp_executor_server.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME grasp_executor_server
-)
+# install(PROGRAMS
+#   contact_graspnet_ros2/grasp_executor_server.py
+#   DESTINATION lib/${PROJECT_NAME}
+#   RENAME grasp_executor_server
+# )
 
-install(PROGRAMS
-  contact_graspnet_ros2/grasp_executor_rgbd_server.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME grasp_executor_rgbd_server
-)
+# install(PROGRAMS
+#   contact_graspnet_ros2/grasp_executor_rgbd_server.py
+#   DESTINATION lib/${PROJECT_NAME}
+#   RENAME grasp_executor_rgbd_server
+# )
 
-install(PROGRAMS
-  contact_graspnet_ros2/grasp_executor_cloud_server.py
-  DESTINATION lib/${PROJECT_NAME}
-  RENAME grasp_executor_cloud_server
-)
+# install(PROGRAMS
+#   contact_graspnet_ros2/grasp_executor_cloud_server.py
+#   DESTINATION lib/${PROJECT_NAME}
+#   RENAME grasp_executor_cloud_server
+# )
 
 # install(PROGRAMS
 #   contact_graspnet_ros2/debug_cgn_grasp_marker.py
@@ -100,7 +107,7 @@ install(DIRECTORY resource/
 )
 
 # Checkpoints: install to share so code can find them via get_package_share_directory
-install(DIRECTORY contact_graspnet/checkpoints/
+install(DIRECTORY contact_graspnet_ros2/contact_graspnet/checkpoints/
   DESTINATION share/${PROJECT_NAME}/checkpoints
 )
 
