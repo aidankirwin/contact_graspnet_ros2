@@ -27,9 +27,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-wheel \
     && rm -rf /var/lib/apt/lists/*
 
-# Add OSRF ROS 2 official secure keys and package index sources
-RUN curl -sSL https://githubusercontent.com -o /usr/share/keyrings/ros-archive-keyring.gpg && \
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://ros.org $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
 # Install complete ROS 2 Humble Desktop alongside build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
