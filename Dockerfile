@@ -196,7 +196,8 @@ RUN pip3 install --no-cache-dir --force-reinstall \
     charset-normalizer==3.3.2 \
     requests==2.31.0 \
     typing-extensions==4.8.0 \
-    urllib3==2.1.0
+    urllib3==2.1.0 \
+    idna==3.4
 
 RUN pip3 check
 
