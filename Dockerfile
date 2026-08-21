@@ -84,7 +84,7 @@ RUN pip3 install --no-cache-dir \
 # Install CGN's pinned Python dependencies
 # ------------------------------------------------------------
 
-RUN pip3 install --no-cache-dir \
+RUN pip3 install --no-cache-dir --ignore-installed \
     filelock==3.13.1 \
     fsspec==2023.10.0 \
     jinja2==3.1.2 \
@@ -97,29 +97,18 @@ RUN pip3 install --no-cache-dir \
     scipy==1.11.4 \
     scikit-learn==1.3.2
 
-
 # ------------------------------------------------------------
 # Install PyTorch Geometric
 #
 # IMPORTANT:
-#
 # These MUST be compiled for the same PyTorch ABI.
 #
 # We are using:
-#
 #     torch 2.1.1 + CUDA 12.1
-#
-# so DO NOT use the old:
-#
-#     torch-2.4.0+cu121
-#
-# wheels.
-#
 # ------------------------------------------------------------
 
 RUN pip3 install --no-cache-dir \
     torch-geometric==2.4.0
-
 
 # ------------------------------------------------------------
 # Install PyG compiled extensions
@@ -137,7 +126,6 @@ RUN pip3 install --no-cache-dir \
     torch_cluster \
     torch_spline_conv \
     -f https://data.pyg.org/whl/torch-2.1.0+cu121.html
-
 
 # ------------------------------------------------------------
 # Test cases
