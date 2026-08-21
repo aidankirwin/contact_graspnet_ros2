@@ -85,17 +85,49 @@ RUN pip3 install --no-cache-dir \
 # ------------------------------------------------------------
 
 RUN pip3 install --no-cache-dir --ignore-installed \
+    asttokens \
+    certifi \
+    charset-normalizer \
+    decorator \
+    exceptiongroup \
+    executing \
     filelock==3.13.1 \
     fsspec==2023.10.0 \
+    idna \
+    importlib-resources \
+    ipython \
+    jedi \
     jinja2==3.1.2 \
+    joblib \
     markupsafe==2.1.3 \
+    matplotlib-inline \
+    meshcat \
+    mpmath \
     networkx==3.2.1 \
     numpy==1.26.2 \
+    parso \
+    pexpect \
     pillow==10.1.0 \
-    sympy==1.12 \
-    typing-extensions==4.8.0 \
+    prompt-toolkit \
+    psutil \
+    ptyprocess \
+    pygments \
+    pyrender \
+    pyyaml \
+    pyzmq \
+    requests \
+    scikit-learn==1.3.2 \
     scipy==1.11.4 \
-    scikit-learn==1.3.2
+    six \
+    stack-data \
+    sympy==1.12 \
+    threadpoolctl \
+    trimesh \
+    typeguard \
+    typing-extensions==4.8.0 \
+    u-msgpack-python \
+    urllib3 \
+    wcwidth
 
 # ------------------------------------------------------------
 # Install PyTorch Geometric
