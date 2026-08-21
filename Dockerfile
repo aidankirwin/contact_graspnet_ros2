@@ -1,69 +1,55 @@
-# Use CUDA 11.8 devel on Ubuntu 22.04 (Compatible with both 2080Ti and 4090 hardware)
-FROM docker.io/nvidia/cuda:11.8.0-devel-ubuntu22.04
+# Use ROS2 Humble Base with Ubuntu 22.04 (Matches Python 3.10 perfectly)
+FROM osrf/ros:humble-desktop-full
 
-# Prevent interactive configuration screens
+# Minimize terminal interactions during build
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
 
-# Install baseline OS packages, build utilities, and required GUI/X11 libraries
+# 1. Install Essential System Tools, Network Utilities, and Python 3.10 Dev libraries
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
+    curl \
+    gnupg2 \
+    ca-certificates \
     git \
     wget \
-    curl \
-    software-properties-common \
-    libgl1-mesa-glx \
-    libegl1-mesa \
-    libgles2-mesa \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender1 \
-    libxt6 \
     python3-pip \
     python3-dev \
-    python3-setuptools \
-    python3-wheel \
-    && rm -rf /var/lib/apt/lists/*
-
-
-# Install complete ROS 2 Humble Desktop alongside build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-humble-desktop \
     python3-colcon-common-extensions \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade packaging managers
-RUN python3 -m pip install --no-cache-dir --upgrade pip
+# 2. Safely bootstrap official NVIDIA CUDA repository config and signing keys via network pin
+RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb \
+    && sudo dpkg -i cuda-keyring_1.1-1_all.deb \
+    && sudo rm cuda-keyring_1.1-1_all.deb
 
-# Install common unified Python ML / Geometric stack
-RUN python3 -m pip install --no-cache-dir \
-    tensorflow==2.12.0 \
-    numpy==1.23.5 \
-    scipy==1.10.1 \
-    matplotlib==3.7.1 \
-    trimesh==3.21.5 \
-    h5py==3.8.0 \
-    opencv-python==4.7.0.72 \
-    pyyaml==6.0 \
-    tqdm==4.65.0 \
-    shapely==2.0.1 \
-    pyrender==0.1.43 \
-    python-fcl==0.0.12 \
-    imageio==2.28.1
+# 3. Install CUDA Toolkit runtime libraries (Required for PyTorch GPU execution)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cuda-libraries-12-1 \
+    cuda-nvtx-12-1 \
+    libcublas-12-1 \
+    libcudnn9-cuda-12 \
+    ros-humble-sensor-msgs-py \
+    && rm -rf /var/lib/apt/lists/*
 
+# Set up environment variables for NVIDIA Runtime recognition
+ENV PATH=/usr/local/cuda-12.1/bin${PATH:+:${PATH}}
+ENV LD_LIBRARY_PATH=/usr/local/cuda-12.1/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 
-# CRITICAL STEP FOR MULTI-GPU MACHINES:
-# Intercept and modify compile script to build universal binary payloads (Fat Binaries)
-# Maps Turing (arch=sm_75) for 2080Ti and Ada Lovelace (arch=sm_89) for 4090.
-WORKDIR /cgn_ws/contact_graspnet_ros2/contact_graspnet/pointnet2/tf_ops
-RUN sed -i 's/-arch=sm_35/-gencode=arch=compute_75,code=sm_75 -gencode=arch=compute_89,code=sm_89/g' compile_pointnet_tfops.sh && \
-    chmod +x compile_pointnet_tfops.sh && \
-    ./compile_pointnet_tfops.sh || true
+# 4. Install CUDA-compatible PyTorch and the Contact-GraspNet port
+# ADDED --ignore-installed to bypass the sympy distutils block
+RUN pip3 install --upgrade pip && \
+    pip3 install --ignore-installed torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-# Global terminal environment variables hook setup
-RUN echo "source /opt/ros/humble/setup.bash" >> /root/.bashrc
+RUN pip3 install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.4.0+cu121.html
 
-WORKDIR /cgn_ws
+# Install Contact-GraspNet bypassing build isolation
+RUN pip3 install cgn-pytorch --no-build-isolation
+
+# 5. Set up ROS2 Entrypoint workspace
+WORKDIR /cgn_ros2_ws
+RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+
+# Default entrypoint sourcing ROS2 pathways automatically
+ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["bash"]

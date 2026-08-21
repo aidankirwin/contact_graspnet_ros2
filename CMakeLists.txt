@@ -21,17 +21,17 @@ ament_export_dependencies(rosidl_default_runtime)
 
 # 1) Install upstream Contact-GraspNet python package
 #    The upstream module lives under: contact_graspnet/contact_graspnet
-ament_python_install_package(contact_graspnet
-  PACKAGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/contact_graspnet/contact_graspnet"
-)
+# ament_python_install_package(contact_graspnet
+#   PACKAGE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/contact_graspnet/contact_graspnet"
+# )
 
 # 2) Install pointnet2 python namespace so "from pointnet2.utils import tf_util" works
 #    We install the whole pointnet2 tree (py files only) as a package
-install(DIRECTORY
-  ${CMAKE_CURRENT_SOURCE_DIR}/contact_graspnet/pointnet2/
-  DESTINATION lib/${PROJECT_NAME}/python_ext/site-packages/pointnet2
-  FILES_MATCHING PATTERN "*.py"
-)
+# install(DIRECTORY
+#   ${CMAKE_CURRENT_SOURCE_DIR}/contact_graspnet/pointnet2/
+#   DESTINATION lib/${PROJECT_NAME}/python_ext/site-packages/pointnet2
+#   FILES_MATCHING PATTERN "*.py"
+# )
 
 # Make sure Python sees that extra site-packages path at runtime:
 # We'll export it with an environment hook.
@@ -106,9 +106,9 @@ install(DIRECTORY resource/
   DESTINATION share/${PROJECT_NAME}/
 )
 
-# Checkpoints: install to share so code can find them via get_package_share_directory
-install(DIRECTORY contact_graspnet_ros2/contact_graspnet/checkpoints/
-  DESTINATION share/${PROJECT_NAME}/checkpoints
-)
+# # Checkpoints: install to share so code can find them via get_package_share_directory
+# install(DIRECTORY contact_graspnet_ros2/contact_graspnet/checkpoints/
+#   DESTINATION share/${PROJECT_NAME}/checkpoints
+# )
 
 ament_package()
