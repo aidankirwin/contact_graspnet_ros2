@@ -1,5 +1,5 @@
 # Use ROS2 Humble Base with Ubuntu 22.04 (Matches Python 3.10 perfectly)
-FROM osrf/ros:humble-desktop-full
+FROM docker.io/osrf/ros:humble-desktop-full
 
 # Minimize terminal interactions during build
 ENV DEBIAN_FRONTEND=noninteractive
