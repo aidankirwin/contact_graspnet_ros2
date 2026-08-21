@@ -192,7 +192,7 @@ import torch_spline_conv; \
 print('torch-spline-conv:', torch_spline_conv.__version__)"
 
 RUN python3 -c "\
-from cgn_pytorch import ContactGraspNet; \
+from cgn_pytorch import CGN; \
 print('========================================'); \
 print('ContactGraspNet import: OK'); \
 print('========================================')"

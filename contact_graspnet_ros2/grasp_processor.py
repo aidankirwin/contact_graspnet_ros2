@@ -17,7 +17,7 @@ from message_filters import Subscriber, ApproximateTimeSynchronizer
 from cv_bridge import CvBridge
 
 # Direct in-memory import of the PyTorch Contact-GraspNet API
-from cgn_pytorch import ContactGraspNet
+import cgn_pytorch
 
 # NOTE: this is mostly AI garbage
 
@@ -41,7 +41,6 @@ class GraspProcessor(Node):
         self.cloud_sub = Subscriber(self, PointCloud2, '/camera/depth/color/points')
         self.seg_sub = Subscriber(self, Image, '/camera/segmentation/mask')
 
-
         # Synchronize depth channels and mask frames within a 0.1-second window
         self.sync = ApproximateTimeSynchronizer(
             [self.cloud_sub, self.seg_sub], 
@@ -50,13 +49,15 @@ class GraspProcessor(Node):
         )
         self.sync.registerCallback(self.synchronized_scene_callback)
 
+        torch.cuda.empty_cache()
+
+        # NOTE: currently I don't know what the optimizer or config_dict are needed for
+        # also from_pretrained handles the torch.device('cuda' if torch.cuda.is_available() else 'cpu') line
+        # from_pretrained doesn't print anything so below we check if cuda is available, but self.device isn't used anywhere
         # Initialize PyTorch device and model directly in memory
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() and not cpu else "cpu")
         self.get_logger().info(f"Loading cgn_pytorch onto device: {self.device}")
-        
-        # Initialize network weights
-        self.model = ContactGraspNet().to(self.device)
-        self.model.eval()
+        self.model, optimizer, config_dict  = cgn_pytorch.from_pretrained(cpu=False)
 
     def depth_and_seg_to_point_cloud(self, depth: np.ndarray, mask: np.ndarray):
         """
@@ -85,6 +86,7 @@ class GraspProcessor(Node):
 
     def synchronized_scene_callback(self, cloud_msg: PointCloud2, seg_msg: Image):
         self.get_logger().info('Received synchronized point cloud and segmentation frame pairs.')
+        self.model.eval()
 
         try:
             # 1. Parse ROS PointCloud2 to an Nx3 numpy array (ignoring RGB/Intensity data fields)
