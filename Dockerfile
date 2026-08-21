@@ -37,9 +37,11 @@ ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 
 # 4. Install CUDA-compatible PyTorch and the Contact-GraspNet port
-# ADDED --ignore-installed to bypass the sympy distutils block
 RUN pip3 install --upgrade pip && \
-    pip3 install --ignore-installed torch torchvision --index-url https://download.pytorch.org/whl/cu121
+    pip3 install --ignore-installed \
+        torch==2.4.0 \
+        torchvision==0.19.0 \
+        --index-url https://download.pytorch.org/whl/cu121
 
 RUN pip3 install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.4.0+cu121.html
 
