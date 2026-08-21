@@ -58,7 +58,6 @@ RUN pip3 install --no-cache-dir --upgrade pip
 #
 # PyTorch officially provides the 2.1.1 + CUDA 12.1 wheel.
 # ------------------------------------------------------------
-
 RUN pip3 install --no-cache-dir \
     torch==2.1.1 \
     torchvision==0.16.1 \
@@ -74,7 +73,6 @@ RUN pip3 install --no-cache-dir \
 # We install those explicitly below rather than allowing pip
 # to silently modify the PyTorch environment.
 # ------------------------------------------------------------
-
 RUN pip3 install --no-cache-dir \
     cgn-pytorch==0.4.3 \
     --no-build-isolation \
@@ -83,51 +81,56 @@ RUN pip3 install --no-cache-dir \
 # ------------------------------------------------------------
 # Install CGN's pinned Python dependencies
 # ------------------------------------------------------------
-
 RUN pip3 install --no-cache-dir --ignore-installed \
-    asttokens \
-    certifi \
-    charset-normalizer \
-    decorator \
-    exceptiongroup \
-    executing \
+    asttokens==2.4.1 \
+    certifi==2023.11.17 \
+    charset-normalizer==3.3.2 \
+    decorator==5.1.1 \
+    exceptiongroup==1.2.0 \
+    executing==2.0.1 \
     filelock==3.13.1 \
     fsspec==2023.10.0 \
-    idna \
-    importlib-resources \
-    ipython \
-    jedi \
+    idna==3.4 \
+    importlib-resources==6.1.1 \
+    ipython==8.17.2 \
+    jedi==0.19.1 \
     jinja2==3.1.2 \
-    joblib \
+    joblib==1.3.2 \
     markupsafe==2.1.3 \
-    matplotlib-inline \
+    matplotlib-inline==0.1.6 \
     meshcat \
-    mpmath \
+    mpmath==1.3.0 \
     networkx==3.2.1 \
     numpy==1.26.2 \
-    parso \
-    pexpect \
+    parso==0.8.3 \
+    pexpect==4.8.0 \
     pillow==10.1.0 \
-    prompt-toolkit \
-    psutil \
+    prompt-toolkit==3.0.41 \
+    psutil==5.9.6 \
     ptyprocess \
-    pygments \
+    pure-eval==0.2.2 \
+    pygments==2.17.2 \
+    pyngrok==7.0.1 \
+    pyparsing==3.1.1 \
     pyrender \
-    pyyaml \
-    pyzmq \
-    requests \
+    pyyaml==6.0.1 \
+    pyzmq==25.1.1 \
+    requests==2.31.0 \
     scikit-learn==1.3.2 \
     scipy==1.11.4 \
-    six \
+    six==1.16.0 \
     stack-data \
     sympy==1.12 \
-    threadpoolctl \
-    trimesh \
-    typeguard \
+    threadpoolctl==3.2.0 \
+    tornado==6.3.3 \
+    tqdm==4.66.1 \
+    traitlets==5.13.0 \
+    trimesh==4.0.4 \
+    typeguard==4.1.5 \
     typing-extensions==4.8.0 \
     u-msgpack-python \
-    urllib3 \
-    wcwidth
+    urllib3==2.1.0 \
+    wcwidth==0.2.12
 
 # ------------------------------------------------------------
 # Install PyTorch Geometric
@@ -138,7 +141,6 @@ RUN pip3 install --no-cache-dir --ignore-installed \
 # We are using:
 #     torch 2.1.1 + CUDA 12.1
 # ------------------------------------------------------------
-
 RUN pip3 install --no-cache-dir \
     torch-geometric==2.4.0
 
@@ -150,7 +152,6 @@ RUN pip3 install --no-cache-dir \
 #
 # they are built for PyTorch 2.1.
 # ------------------------------------------------------------
-
 RUN pip3 install --no-cache-dir \
     pyg_lib \
     torch_scatter \
@@ -162,7 +163,6 @@ RUN pip3 install --no-cache-dir \
 # ------------------------------------------------------------
 # Test cases
 # ------------------------------------------------------------
-
 RUN python3 -c "\
 import torch; \
 print('========================================'); \
@@ -172,29 +172,22 @@ print('CUDA available:', torch.cuda.is_available()); \
 print('========================================')"
 
 RUN python3 -c "\
+import torch; \
 import torch_geometric; \
-print('PyG:', torch_geometric.__version__)"
-
-RUN python3 -c "\
 import torch_scatter; \
-print('torch-scatter:', torch_scatter.__version__)"
-
-RUN python3 -c "\
 import torch_cluster; \
-print('torch-cluster:', torch_cluster.__version__)"
-
-RUN python3 -c "\
 import torch_sparse; \
-print('torch-sparse:', torch_sparse.__version__)"
-
-RUN python3 -c "\
 import torch_spline_conv; \
-print('torch-spline-conv:', torch_spline_conv.__version__)"
-
-RUN python3 -c "\
 from cgn_pytorch import CGN; \
 print('========================================'); \
-print('ContactGraspNet import: OK'); \
+print('ALL CGN DEPENDENCIES OK'); \
+print('PyTorch:', torch.__version__); \
+print('PyG:', torch_geometric.__version__); \
+print('PyG scatter:', torch_scatter.__version__); \
+print('PyG cluster:', torch_cluster.__version__); \
+print('PyG sparse:', torch_sparse.__version__); \
+print('PyG spline:', torch_spline_conv.__version__); \
+print('CGN: OK'); \
 print('========================================')"
 
 RUN pip3 check
