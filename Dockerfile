@@ -190,6 +190,14 @@ print('PyG spline:', torch_spline_conv.__version__); \
 print('CGN: OK'); \
 print('========================================')"
 
+# TBD
+RUN pip3 install --no-cache-dir --force-reinstall \
+    certifi==2023.11.17 \
+    charset-normalizer==3.3.2 \
+    requests==2.31.0 \
+    typing-extensions==4.8.0 \
+    urllib3==2.1.0
+
 RUN pip3 check
 
 WORKDIR /cgn_ros2_ws
