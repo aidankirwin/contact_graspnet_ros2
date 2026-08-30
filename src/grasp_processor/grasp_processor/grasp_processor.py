@@ -21,6 +21,10 @@ from grasp_interface.msg import Grasps
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 from cv_bridge import CvBridge
 
+# To time processing
+import threading
+import time
+
 # PyTorch Contact-GraspNet API
 import cgn_pytorch
 
@@ -131,8 +135,46 @@ class GraspProcessor(Node):
                                             rrn_config
                                             )
 
+        ### WORKER THREAD SETUP
+        self.frame_lock = threading.Lock()
+        self.latest_frame = None
+        self.processing = False
+
+        self.inference_thread = threading.Thread(
+            target=self._inference_worker,
+            daemon=True
+        )
+        self.inference_thread.start()
+
     def synchronized_scene_callback(self, cloud_msg: PointCloud2, rgb_msg: Image, depth_msg: Image):
-        self.get_logger().info('Received synchronized point cloud, RGB, and depth data.')
+        with self.frame_lock:
+            self.latest_frame = (
+                cloud_msg,
+                rgb_msg,
+                depth_msg
+            )
+
+    def _inference_worker(self):
+        while rclpy.ok():
+            with self.frame_lock:
+                frame = self.latest_frame
+                self.latest_frame = None
+            if frame is None:
+                time.sleep(0.001)
+                continue
+
+            cloud_msg, rgb_msg, depth_msg = frame
+
+            try:
+                self._process_frame(cloud_msg, rgb_msg, depth_msg)
+            except Exception as e:
+                self.get_logger().error(
+                    f'Inference failed: {e}'
+                )
+
+
+    def _process_frame(self, cloud_msg, rgb_msg, depth_msg):
+        self.get_logger().info('Processing data.')
         self.model.eval()
 
         #### PARSE DATA
