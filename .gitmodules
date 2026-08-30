@@ -1,0 +1,3 @@
+[submodule "src/grasp_processor/grasp_processor/uois"]
+	path = src/grasp_processor/grasp_processor/uois
+	url = https://github.com/aidankirwin/uois.git
