@@ -199,6 +199,10 @@ print('PyG spline:', torch_spline_conv.__version__); \
 print('CGN: OK'); \
 print('========================================')"
 
+# UOIS installs
+RUN pip3 install --no-cache-dir --force-reinstall pypng
+RUN pip3 install --no-deps scikit-image==0.23.2
+
 RUN pip3 check
 
 WORKDIR /cgn_ros2_ws

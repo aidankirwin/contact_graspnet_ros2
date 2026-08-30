@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package format="3">
+
+  <name>grasp_processor</name>
+  <version>0.0.0</version>
+
+  <description>Contact GraspNet ROS 2 grasp processor</description>
+
+  <maintainer email="your@email.com">Your Name</maintainer>
+
+  <license>Apache-2.0</license>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>grasp_interface</depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+
+</package>
