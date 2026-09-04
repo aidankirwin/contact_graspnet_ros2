@@ -7,15 +7,20 @@ from ament_index_python.packages import get_package_share_directory
 import numpy as np
 import torch
 from scipy.spatial.transform import Rotation as R
+import random
+from torch_geometric.nn import fps
 
 # ROS2 stuff
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image, PointCloud2
+from sensor_msgs.msg import Image
+from sensor_msgs.msg import PointCloud2
+from sensor_msgs_py import point_cloud2
 from geometry_msgs.msg import PoseArray, Pose
 from std_msgs.msg import Int32MultiArray
 from sensor_msgs_py import point_cloud2
 from grasp_interface.msg import Grasps
+from sensor_msgs.msg import CameraInfo
 
 # Approximate time synchronizer libraries
 from message_filters import Subscriber, ApproximateTimeSynchronizer
@@ -47,12 +52,13 @@ class GraspProcessor(Node):
 
         # TODO: need to check these topic names with real camera
         if self.is_gazebo == 'true':
-            rgb_topic = '/depth_camera/color/image'
-            depth_topic = 'depth_camera/depth/image'
+            rgb_topic = '/depth_camera/image'
+            depth_topic = 'depth_camera/depth_image'
             pts_topic = '/depth_camera/points'
         else:
             rgb_topic = '/camera/camera/color/image_raw'
-            depth_topic = '/camera/depth/color/points'
+            depth_topic = '/camera/depth/color/depth_raw'
+            pts_topic = '/camera/depth/color/points'
         
         # Output publishers configurations
         self.grasp_pub = self.create_publisher(Grasps, '/predicted_grasps', 10)
@@ -60,10 +66,12 @@ class GraspProcessor(Node):
 
         self.seg_pub = self.create_publisher(Image, '/segmentation', 10) # we publish the segmentation map for viz
 
-        # TODO: get real intrinsics from the camera
-        # these are assumed based on the expected values for a D435 @ 1280x720
-        self.fx, self.fy = 1230.0, 1230.0
-        self.cx, self.cy = 640.0, 360.0
+        #### Camera data subscribers
+        self.camera_info_sub = self.create_subscription(CameraInfo, '/depth_camera/camera_info', self.camera_info_callback, 10)
+        self.fx = None
+        self.fy = None
+        self.cx = None
+        self.cy = None
 
         # Define localized message filters for real-time tracking streams
         self.cloud_sub = Subscriber(self, PointCloud2, pts_topic)
@@ -128,12 +136,13 @@ class GraspProcessor(Node):
         dsn_filename = checkpoint_dir + 'DepthSeedingNetwork_3D_TOD_checkpoint.pth'
         rrn_filename = checkpoint_dir + 'RRN_OID_checkpoint.pth'
         uois3d_config['final_close_morphology'] = 'TableTop_v5' in rrn_filename
-        uois_net_3d = segmentation.UOISNet3D(uois3d_config, 
+        self.uois_net_3d = segmentation.UOISNet3D(uois3d_config, 
                                             dsn_filename,
                                             dsn_config,
                                             rrn_filename,
                                             rrn_config
                                             )
+        self.get_logger().info(f"UOIS configured")
 
         ### WORKER THREAD SETUP
         self.frame_lock = threading.Lock()
@@ -145,6 +154,21 @@ class GraspProcessor(Node):
             daemon=True
         )
         self.inference_thread.start()
+        self.get_logger().info(f"Inference thread started")
+
+        ### FOR TESTING
+        self.organized_pcd_pub = self.create_publisher(
+            PointCloud2,
+            '/grasp_processor/organized_pcd',
+            10
+        )
+
+        self.unorganized_pcd_pub = self.create_publisher(
+            PointCloud2,
+            '/grasp_processor/unorganized_pcd',
+            10
+        )
+
 
     def synchronized_scene_callback(self, cloud_msg: PointCloud2, rgb_msg: Image, depth_msg: Image):
         with self.frame_lock:
@@ -153,6 +177,23 @@ class GraspProcessor(Node):
                 rgb_msg,
                 depth_msg
             )
+        # self.get_logger().info('TESTING: RECEIVED DATA.')
+
+    def camera_info_callback(self, msg):
+        self.fx = msg.k[0]
+        self.fy = msg.k[4]
+        self.cx = msg.k[2]
+        self.cy = msg.k[5]
+
+        self.get_logger().info(
+            f"Camera intrinsics: "
+            f"fx={self.fx:.2f}, fy={self.fy:.2f}, "
+            f"cx={self.cx:.2f}, cy={self.cy:.2f}"
+        )
+
+        # No longer need CameraInfo
+        self.destroy_subscription(self.camera_info_sub)
+        self.camera_info_sub = None
 
     def _inference_worker(self):
         while rclpy.ok():
@@ -172,9 +213,52 @@ class GraspProcessor(Node):
                     f'Inference failed: {e}'
                 )
 
+    def _publish_xyz_cloud(self, xyz, header, publisher, organized=False):
+        """
+        Publish an XYZ numpy array as PointCloud2.
+
+        xyz:
+            Organized:   (H, W, 3)
+            Unorganized: (N, 3)
+
+        Invalid XYZ values should be NaN/inf and will be preserved.
+        """
+
+        xyz = np.asarray(xyz, dtype=np.float32)
+
+        if organized:
+            if xyz.ndim != 3 or xyz.shape[-1] != 3:
+                raise ValueError(
+                    f"Expected organized XYZ shape (H,W,3), got {xyz.shape}"
+                )
+
+            points = xyz.reshape(-1, 3)
+
+        else:
+            if xyz.ndim != 2 or xyz.shape[-1] != 3:
+                raise ValueError(
+                    f"Expected unorganized XYZ shape (N,3), got {xyz.shape}"
+                )
+
+            points = xyz
+
+        # create_cloud_xyz32 accepts NaNs, which is what we want for
+        # invalid pixels in the organized cloud.
+        msg = point_cloud2.create_cloud_xyz32(
+            header,
+            points.tolist()
+        )
+
+        publisher.publish(msg)
+
 
     def _process_frame(self, cloud_msg, rgb_msg, depth_msg):
         self.get_logger().info('Processing data.')
+
+        if (self.fx is None) or (self.fy is None) or (self.cx is None) or (self.cy is None):
+            self.get_logger().info('Camera intrinsics not yet set.')
+            return
+
         self.model.eval()
 
         #### PARSE DATA
@@ -182,12 +266,43 @@ class GraspProcessor(Node):
             # Parse ROS PointCloud2 to an Nx3 numpy array (ignoring RGB/Intensity data fields)
             # NOTE: this is an unorganized pc, it's faster to convert depth img --> organized pc, which is why we subscribe to both pcd and depth data
             # we use unorganized pcd for CGN and organized pcd for UOIS
-            cloud_gen = point_cloud2.read_points(cloud_msg, field_names=("x", "y", "z"), skip_nans=True)
-            pcd = np.array(list(cloud_gen), dtype=np.float32)
+            cloud = point_cloud2.read_points(
+                cloud_msg,
+                field_names=("x", "y", "z"),
+                skip_nans=True
+            )
+            pcd = np.column_stack((
+                cloud["x"],
+                cloud["y"],
+                cloud["z"]
+            )).astype(np.float32)
+
+            self._publish_xyz_cloud(
+                pcd,
+                cloud_msg.header,
+                self.unorganized_pcd_pub,
+                organized=False
+            )
             
             # Convert incoming RGB and depth data to np arrays
-            rgb_data = np.frombuffer(rgb_msg.data, dtype=np.uint8).reshape(rgb_msg.height, rgb_msg.width)
-            dep_data = np.frombuffer(depth_msg.data, dtype=np.uint8).reshape(depth_msg.height, depth_msg.width)
+            rgb_data = np.frombuffer(rgb_msg.data, dtype=np.uint8 ).reshape(rgb_msg.height, rgb_msg.width, 3)
+            # 32FC1 encoding
+            dep_data = np.frombuffer(depth_msg.data, dtype=np.float32).reshape(depth_msg.height, depth_msg.width)
+
+            dep_data = dep_data.astype(np.float32)
+
+            # Replace NaN / +/-inf with 0
+            dep_data[~np.isfinite(dep_data)] = 0.0
+
+            self.get_logger().info(
+                f"Depth: shape={dep_data.shape}, "
+                f"dtype={dep_data.dtype}, "
+                f"min={np.nanmin(dep_data)}, "
+                f"max={np.nanmax(dep_data)}, "
+                f"finite={np.isfinite(dep_data).all()}, "
+                f"valid={(np.isfinite(dep_data) & (dep_data > 0)).sum()}"
+            )
+
         except Exception as e:
             self.get_logger().error(f'Failed parsing input messages: {str(e)}')
             return
@@ -200,6 +315,29 @@ class GraspProcessor(Node):
         try:
             # first we will convert dep_np to an organized pt cloud
             organized_pcd = self._depth_to_organized_pc(dep_data, self.fx, self.fy, self.cx, self.cy)
+            self._publish_xyz_cloud(
+                organized_pcd,
+                depth_msg.header,
+                self.organized_pcd_pub,
+                organized=True
+            )
+
+            valid_xyz = np.isfinite(organized_pcd).all(axis=-1) & (organized_pcd[..., 2] > 0)
+
+            self.get_logger().info(
+                f"Valid XYZ pixels: {valid_xyz.sum()} / {valid_xyz.size}"
+            )
+
+            if valid_xyz.any():
+                xyz_valid = organized_pcd[valid_xyz]
+
+                self.get_logger().info(
+                    f"Valid XYZ range: "
+                    f"X=[{xyz_valid[:,0].min():.3f}, {xyz_valid[:,0].max():.3f}], "
+                    f"Y=[{xyz_valid[:,1].min():.3f}, {xyz_valid[:,1].max():.3f}], "
+                    f"Z=[{xyz_valid[:,2].min():.3f}, {xyz_valid[:,2].max():.3f}]"
+                )
+
             # then pass to UOIS
             seg_mask = self._get_segmentation_mask(rgb_data, organized_pcd)
             mask = np.asarray(seg_mask)
@@ -208,6 +346,24 @@ class GraspProcessor(Node):
             # (H, W, 1) -> (H, W)
             if mask.ndim == 3 and mask.shape[-1] == 1:
                 mask = mask[..., 0]
+
+            self.get_logger().info(
+                f"UOIS mask: shape={mask.shape}, "
+                f"dtype={mask.dtype}, "
+                f"min={mask.min()}, "
+                f"max={mask.max()}, "
+                f"unique={np.unique(mask)}"
+            )
+
+            # Anything belonging to an object becomes white
+            mask_viz = (mask > 0).astype(np.uint8) * 255
+            mask_msg = self.bridge.cv2_to_imgmsg(
+                mask_viz,
+                encoding='mono8'
+            )
+            mask_msg.header = cloud_msg.header
+            self.seg_pub.publish(mask_msg)
+
             # (H, W) -> (H*W,)
             mask = mask.reshape(-1)
 
@@ -262,7 +418,7 @@ class GraspProcessor(Node):
             )
 
         except Exception as e:
-            self.get_logger().error(f"In-memory CGN PyTorch inference crash: {str(e)}")
+            self.get_logger().error(f"CGN inference crash: {str(e)}")
 
 
     def _get_segmentation_mask(self, rgb: np.array, xyz: np.array):
@@ -275,18 +431,42 @@ class GraspProcessor(Node):
             seg_mask: np.array containing the segmentation data
         """
 
+        self.get_logger().info(
+            f"RGB: shape={rgb.shape}, dtype={rgb.dtype}, "
+            f"min={rgb.min()}, max={rgb.max()}"
+        )
+
+        self.get_logger().info(
+            f"XYZ: shape={xyz.shape}, dtype={xyz.dtype}, "
+            f"min={np.nanmin(xyz)}, max={np.nanmax(xyz)}, "
+            f"finite={np.isfinite(xyz).all()}"
+        )
+        self.get_logger().info(
+            f"XYZ NaNs: {np.isnan(xyz).sum()}, "
+            f"XYZ infs: {np.isinf(xyz).sum()}"
+        )
+
         N = 1   # NOTE: we could modify this later to generate segmentation masks in bulk from a buffer, this would probably be faster
         rgb_imgs = np.zeros((N, rgb.shape[0], rgb.shape[1], 3))
         xyz_imgs = np.zeros((N, rgb.shape[0], rgb.shape[1], 3))
-        rgb_imgs[0] = rgb
+        rgb_imgs[0] = data_augmentation.standardize_image(rgb)
         xyz_imgs[0] = xyz
 
         batch = {
             'rgb' : data_augmentation.array_to_tensor(rgb_imgs),
             'xyz' : data_augmentation.array_to_tensor(xyz_imgs),
         }
-        fg_masks, center_offsets, initial_masks, seg_masks = uois_net_3d.run_on_batch(batch)
+        fg_masks, center_offsets, initial_masks, seg_masks = self.uois_net_3d.run_on_batch(batch)
         seg_masks = seg_masks.cpu().numpy()
+
+        self.get_logger().info(
+            f"UOIS raw seg_masks: "
+            f"shape={seg_masks.shape}, "
+            f"dtype={seg_masks.dtype}, "
+            f"min={seg_masks.min()}, "
+            f"max={seg_masks.max()}, "
+            f"unique={np.unique(seg_masks)[:20]}"
+        )
 
         return seg_masks[0]
 
@@ -336,11 +516,15 @@ class GraspProcessor(Node):
             )
         
         # RUN CGN
-        points, pred_grasps, confidence, pred_widths, _, pred_collide = cgn(
+        gripper_depth = 0.1034
+        gripper_width = 0.08
+        points, pred_grasps, confidence, pred_widths, _, _ = cgn(
             pcd[:, 3:],
-            pos=pcd[:, :3],
+            pcd_poses=pcd[:, :3],
             batch=batch,
-            idx=idx
+            idxs=idx,
+            gripper_depth=gripper_depth,
+            gripper_width=gripper_width,
         )
 
         confidence = torch.sigmoid(confidence)
@@ -408,24 +592,31 @@ class GraspProcessor(Node):
         fx, fy (float): Camera focal lengths from camera_info.
         cx, cy (float): Camera principal point (optical center) from camera_info.
         """
-        # Ensure depth map is 2D (H, W)
         if depth_map.ndim == 3:
             depth_map = depth_map.squeeze(-1)
-            
+
+        depth_map = depth_map.astype(np.float32)
+
         h, w = depth_map.shape
 
-        # Create a 2D grid of pixel coordinates (u, v)
-        # indexing='xy' ensures u corresponds to columns (width) and v to rows (height)
-        u, v = np.meshgrid(np.arange(w), np.arange(h), indexing='xy')
+        u, v = np.meshgrid(
+            np.arange(w, dtype=np.float32),
+            np.arange(h, dtype=np.float32),
+            indexing='xy'
+        )
 
-        # Compute X and Y matrices using the standard pinhole camera formula
-        x_coords = (u - cx) * depth_map / fx
-        y_coords = (v - cy) * depth_map / fy
+        valid = np.isfinite(depth_map) & (depth_map > 0.0)
 
-        # Stack along the third axis to get an organized (H, W, 3) matrix
-        organized_pc = np.stack((x_coords, y_coords, depth_map), axis=-1)
+        x = (u - cx) * depth_map / fx
+        y = (v - cy) * depth_map / fy
+        z = depth_map
 
-        return organized_pc
+        # Mark invalid depth as invalid XYZ
+        x[~valid] = np.nan
+        y[~valid] = np.nan
+        z[~valid] = np.nan
+
+        return np.stack((x, y, z), axis=-1)
 
 def main(args=None):
     rclpy.init(args=args)
