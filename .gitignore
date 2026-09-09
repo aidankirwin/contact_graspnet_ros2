@@ -21,3 +21,6 @@ checkpoints/
 
 # specific
 contact_graspnet_docker/backup
+
+# Images
+*.png

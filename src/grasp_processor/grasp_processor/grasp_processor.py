@@ -14,17 +14,15 @@ from torch_geometric.nn import fps
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from sensor_msgs.msg import PointCloud2
-from sensor_msgs_py import point_cloud2
 from geometry_msgs.msg import PoseArray, Pose
 from std_msgs.msg import Int32MultiArray
-from sensor_msgs_py import point_cloud2
 from grasp_interface.msg import Grasps
 from sensor_msgs.msg import CameraInfo
 
 # Approximate time synchronizer libraries
 from message_filters import Subscriber, ApproximateTimeSynchronizer
 from cv_bridge import CvBridge
+import cv2
 
 # To time processing
 import threading
@@ -45,6 +43,9 @@ class GraspProcessor(Node):
         super().__init__('grasp_processor')
         self.bridge = CvBridge()
 
+        self.save_plots = True
+        self.plt_ctr = 0
+
         # the topic names are slightly different in sim so grab gazebo parameter
         self.declare_parameter('is_gazebo', 'true')
         self.is_gazebo = self.get_parameter('is_gazebo').get_parameter_value().string_value
@@ -54,11 +55,9 @@ class GraspProcessor(Node):
         if self.is_gazebo == 'true':
             rgb_topic = '/depth_camera/image'
             depth_topic = 'depth_camera/depth_image'
-            pts_topic = '/depth_camera/points'
         else:
             rgb_topic = '/camera/camera/color/image_raw'
             depth_topic = '/camera/depth/color/depth_raw'
-            pts_topic = '/camera/depth/color/points'
         
         # Output publishers configurations
         self.grasp_pub = self.create_publisher(Grasps, '/predicted_grasps', 10)
@@ -74,13 +73,12 @@ class GraspProcessor(Node):
         self.cy = None
 
         # Define localized message filters for real-time tracking streams
-        self.cloud_sub = Subscriber(self, PointCloud2, pts_topic)
         self.depth_sub = Subscriber(self, Image, depth_topic)
         self.rgb_sub = Subscriber(self, Image, rgb_topic)
 
         # Synchronize depth channels and mask frames within a 0.1-second window
         self.sync = ApproximateTimeSynchronizer(
-            [self.cloud_sub, self.rgb_sub, self.depth_sub], 
+            [self.rgb_sub, self.depth_sub], 
             queue_size=10, 
             slop=0.1
         )
@@ -98,18 +96,33 @@ class GraspProcessor(Node):
 
         #### UOIS SETUP
         dsn_config = {
-            # Sizes
+            # Feature Dimensions: controls the dimensionality of the learned feature representation used by the network
+            #    Potentially better separation of visually/geometrically similar objects
+            #    More model computation and memory
+            #    Potentially useful if seeing objects being merged
+            #    Doesn't directly control the size or number of clusters
             'feature_dim' : 64, # 32 would be normal
 
             # Mean Shift parameters (for 3D voting)
             'max_GMS_iters' : 10, 
-            'epsilon' : 0.05, # Connected Components parameter
-            'sigma' : 0.02, # Gaussian bandwidth parameter
+
+            # Epsilon: controls the spatial tolerance used when determining whether things belong to the same 
+            # connected component/cluster after the voting stage
+            #    smaller epsilon --> stricter connectivity --> more likely to split things apart
+            #    larger epsilon --> looser connectivity --> more likely to merge things together
+            'epsilon' : 0.07, # Connected Components parameter
+
+            # Sigma: the Gaussian bandwidth used during mean shift, essentially determines how much influence neighboring votes have
+            #    smaller sigma --> better separation of nearby objects, more fragmented objects, more sensitivity to noisy predictions
+            #    larger sigma --> smoother clustering, more robust to noise, more likely to merge nearby objects
+            'sigma' : 0.05, # Gaussian bandwidth parameter
+
             'num_seeds' : 200, # Used for MeanShift, but not BlurringMeanShift
             'subsample_factor' : 5,
             
-            # Misc
+            # Minimum Pixel Threshold: controls min number of pixels for a cluster to be considered a valid object
             'min_pixels_thresh' : 500,
+
             'tau' : 15.,
         }
         rrn_config = {
@@ -156,24 +169,10 @@ class GraspProcessor(Node):
         self.inference_thread.start()
         self.get_logger().info(f"Inference thread started")
 
-        ### FOR TESTING
-        self.organized_pcd_pub = self.create_publisher(
-            PointCloud2,
-            '/grasp_processor/organized_pcd',
-            10
-        )
 
-        self.unorganized_pcd_pub = self.create_publisher(
-            PointCloud2,
-            '/grasp_processor/unorganized_pcd',
-            10
-        )
-
-
-    def synchronized_scene_callback(self, cloud_msg: PointCloud2, rgb_msg: Image, depth_msg: Image):
+    def synchronized_scene_callback(self, rgb_msg: Image, depth_msg: Image):
         with self.frame_lock:
             self.latest_frame = (
-                cloud_msg,
                 rgb_msg,
                 depth_msg
             )
@@ -204,55 +203,16 @@ class GraspProcessor(Node):
                 time.sleep(0.001)
                 continue
 
-            cloud_msg, rgb_msg, depth_msg = frame
+            rgb_msg, depth_msg = frame
 
             try:
-                self._process_frame(cloud_msg, rgb_msg, depth_msg)
+                self._process_frame(rgb_msg, depth_msg)
             except Exception as e:
                 self.get_logger().error(
                     f'Inference failed: {e}'
                 )
 
-    def _publish_xyz_cloud(self, xyz, header, publisher, organized=False):
-        """
-        Publish an XYZ numpy array as PointCloud2.
-
-        xyz:
-            Organized:   (H, W, 3)
-            Unorganized: (N, 3)
-
-        Invalid XYZ values should be NaN/inf and will be preserved.
-        """
-
-        xyz = np.asarray(xyz, dtype=np.float32)
-
-        if organized:
-            if xyz.ndim != 3 or xyz.shape[-1] != 3:
-                raise ValueError(
-                    f"Expected organized XYZ shape (H,W,3), got {xyz.shape}"
-                )
-
-            points = xyz.reshape(-1, 3)
-
-        else:
-            if xyz.ndim != 2 or xyz.shape[-1] != 3:
-                raise ValueError(
-                    f"Expected unorganized XYZ shape (N,3), got {xyz.shape}"
-                )
-
-            points = xyz
-
-        # create_cloud_xyz32 accepts NaNs, which is what we want for
-        # invalid pixels in the organized cloud.
-        msg = point_cloud2.create_cloud_xyz32(
-            header,
-            points.tolist()
-        )
-
-        publisher.publish(msg)
-
-
-    def _process_frame(self, cloud_msg, rgb_msg, depth_msg):
+    def _process_frame(self, rgb_msg, depth_msg):
         self.get_logger().info('Processing data.')
 
         if (self.fx is None) or (self.fy is None) or (self.cx is None) or (self.cy is None):
@@ -263,32 +223,10 @@ class GraspProcessor(Node):
 
         #### PARSE DATA
         try:
-            # Parse ROS PointCloud2 to an Nx3 numpy array (ignoring RGB/Intensity data fields)
-            # NOTE: this is an unorganized pc, it's faster to convert depth img --> organized pc, which is why we subscribe to both pcd and depth data
-            # we use unorganized pcd for CGN and organized pcd for UOIS
-            cloud = point_cloud2.read_points(
-                cloud_msg,
-                field_names=("x", "y", "z"),
-                skip_nans=True
-            )
-            pcd = np.column_stack((
-                cloud["x"],
-                cloud["y"],
-                cloud["z"]
-            )).astype(np.float32)
-
-            self._publish_xyz_cloud(
-                pcd,
-                cloud_msg.header,
-                self.unorganized_pcd_pub,
-                organized=False
-            )
-            
             # Convert incoming RGB and depth data to np arrays
             rgb_data = np.frombuffer(rgb_msg.data, dtype=np.uint8 ).reshape(rgb_msg.height, rgb_msg.width, 3)
             # 32FC1 encoding
             dep_data = np.frombuffer(depth_msg.data, dtype=np.float32).reshape(depth_msg.height, depth_msg.width)
-
             dep_data = dep_data.astype(np.float32)
 
             # Replace NaN / +/-inf with 0
@@ -307,45 +245,32 @@ class GraspProcessor(Node):
             self.get_logger().error(f'Failed parsing input messages: {str(e)}')
             return
 
-        if pcd.shape[0] == 0:
-            self.get_logger().warn("Empty point cloud received. Skipping frame.")
-            return
-
         #### GET SEGMENTATION MASK
         try:
             # first we will convert dep_np to an organized pt cloud
             organized_pcd = self._depth_to_organized_pc(dep_data, self.fx, self.fy, self.cx, self.cy)
-            self._publish_xyz_cloud(
-                organized_pcd,
-                depth_msg.header,
-                self.organized_pcd_pub,
-                organized=True
-            )
 
-            valid_xyz = np.isfinite(organized_pcd).all(axis=-1) & (organized_pcd[..., 2] > 0)
-
-            self.get_logger().info(
-                f"Valid XYZ pixels: {valid_xyz.sum()} / {valid_xyz.size}"
-            )
-
-            if valid_xyz.any():
-                xyz_valid = organized_pcd[valid_xyz]
-
-                self.get_logger().info(
-                    f"Valid XYZ range: "
-                    f"X=[{xyz_valid[:,0].min():.3f}, {xyz_valid[:,0].max():.3f}], "
-                    f"Y=[{xyz_valid[:,1].min():.3f}, {xyz_valid[:,1].max():.3f}], "
-                    f"Z=[{xyz_valid[:,2].min():.3f}, {xyz_valid[:,2].max():.3f}]"
+            # NOTE: for now let's just assume the camera data is already 480x640
+            # return a warning if it isn't
+            if rgb_data.shape[0] != 480 or rgb_data.shape[1] != 640:
+                self.get_logger().warn(
+                    f"Input RGB image is not 480x640: "
+                    f"height={rgb_data.shape[0]}, width={rgb_data.shape[1]}"
                 )
+            # resize everything to 480x640
+            # target_h, target_w = 480, 640
+            # rgb_data = cv2.resize(rgb_data, (target_w, target_h), interpolation=cv2.INTER_LINEAR,).astype(np.float32)
+            # organized_pcd = cv2.resize(organized_pcd, (target_w, target_h), interpolation=cv2.INTER_NEAREST,).astype(np.float32)
+            rgb_data = rgb_data.astype(np.float32)
+            organized_pcd = organized_pcd.astype(np.float32)
+            # remove nans from organized_pcd
+            organized_pcd = np.nan_to_num(organized_pcd, nan=0.0)
+            pcd = organized_pcd.reshape(-1, 3)
+            pcd = pcd[np.isfinite(pcd).all(axis=1)]
 
             # then pass to UOIS
             seg_mask = self._get_segmentation_mask(rgb_data, organized_pcd)
             mask = np.asarray(seg_mask)
-            
-            # then reshape mask so it can be used by cgn
-            # (H, W, 1) -> (H, W)
-            if mask.ndim == 3 and mask.shape[-1] == 1:
-                mask = mask[..., 0]
 
             self.get_logger().info(
                 f"UOIS mask: shape={mask.shape}, "
@@ -355,15 +280,10 @@ class GraspProcessor(Node):
                 f"unique={np.unique(mask)}"
             )
 
-            # Anything belonging to an object becomes white
-            mask_viz = (mask > 0).astype(np.uint8) * 255
-            mask_msg = self.bridge.cv2_to_imgmsg(
-                mask_viz,
-                encoding='mono8'
-            )
-            mask_msg.header = cloud_msg.header
-            self.seg_pub.publish(mask_msg)
-
+            # then reshape mask so it can be used by cgn
+            # (H, W, 1) -> (H, W)
+            if mask.ndim == 3 and mask.shape[-1] == 1:
+                mask = mask[..., 0]
             # (H, W) -> (H*W,)
             mask = mask.reshape(-1)
 
@@ -375,7 +295,15 @@ class GraspProcessor(Node):
         try:
             grasps_matrices, scores, object_ids, _ = self._cgn_infer(pcd, mask)
 
-            # sort by confience
+            # Log grasps info
+            self.get_logger().info(
+                f"CGN generated {len(grasps_matrices)} grasps, "
+                f"Highest score: {scores.max():.2f}, "
+                f"Grasp matrices shape: {grasps_matrices.shape}, "
+                f"Object IDs: {np.unique(object_ids).tolist()}"
+            )
+
+            # sort by confidence
             sorted_indices = np.argsort(scores)[::-1]
 
             grasps_matrices = grasps_matrices[sorted_indices]
@@ -384,7 +312,6 @@ class GraspProcessor(Node):
 
             # construct grasps msg
             grasp_msg = Grasps()
-            grasp_msg.header = cloud_msg.header
 
             for T, score, object_id in zip(grasps_matrices, scores, object_ids):
                 pose = Pose()
@@ -397,7 +324,7 @@ class GraspProcessor(Node):
                 # Orientation
                 q = R.from_matrix(
                     T[:3, :3]
-                ).as_quat(scalar_first=False)
+                ).as_quat()
 
                 pose.orientation.x = float(q[0])
                 pose.orientation.y = float(q[1])
@@ -417,19 +344,35 @@ class GraspProcessor(Node):
                 f"Object IDs: {np.unique(object_ids).tolist()}"
             )
 
+            if self.save_plots:
+                self._save_grasp_visualization(
+                    rgb=rgb_data,
+                    grasps_matrices=grasps_matrices,
+                    scores=scores,
+                    object_ids=object_ids,
+                    output_path=f"grasps_{self.plt_ctr}.png"
+                )
+                self.plt_ctr += 1
+
         except Exception as e:
             self.get_logger().error(f"CGN inference crash: {str(e)}")
 
 
     def _get_segmentation_mask(self, rgb: np.array, xyz: np.array):
-        """Generate segmentation mask using UOIS
+        """Generate segmentation mask using UOIS.
+
         Args:
             rgb: np.array (HxWx3) containing the RGB data from the current frame
-            xyz: np.array (HxWx3) containing the depth information (organized pt cloud) from the current frame
+            xyz: np.array (HxWx3) containing the depth information
+                (organized pt cloud) from the current frame
 
         Returns:
-            seg_mask: np.array containing the segmentation data
+            seg_mask: np.array containing the segmentation data in the
+                original image shape.
         """
+
+        # remove nans from xyz
+        xyz = np.nan_to_num(xyz, nan=0.0)
 
         self.get_logger().info(
             f"RGB: shape={rgb.shape}, dtype={rgb.dtype}, "
@@ -441,22 +384,37 @@ class GraspProcessor(Node):
             f"min={np.nanmin(xyz)}, max={np.nanmax(xyz)}, "
             f"finite={np.isfinite(xyz).all()}"
         )
+
         self.get_logger().info(
             f"XYZ NaNs: {np.isnan(xyz).sum()}, "
             f"XYZ infs: {np.isinf(xyz).sum()}"
         )
 
-        N = 1   # NOTE: we could modify this later to generate segmentation masks in bulk from a buffer, this would probably be faster
-        rgb_imgs = np.zeros((N, rgb.shape[0], rgb.shape[1], 3))
-        xyz_imgs = np.zeros((N, rgb.shape[0], rgb.shape[1], 3))
-        rgb_imgs[0] = data_augmentation.standardize_image(rgb)
-        xyz_imgs[0] = xyz
+        N = 1
+        rgb_imgs = np.zeros((N, rgb.shape[0], rgb.shape[1], 3), dtype=np.float32)
+        xyz_imgs = np.zeros((N, xyz.shape[0], xyz.shape[1], 3), dtype=np.float32)
+
+        rgb_imgs[0] = data_augmentation.standardize_image(rgb.astype(np.float32))
+        xyz_imgs[0] = xyz.astype(np.float32)
 
         batch = {
-            'rgb' : data_augmentation.array_to_tensor(rgb_imgs),
-            'xyz' : data_augmentation.array_to_tensor(xyz_imgs),
+            'rgb': data_augmentation.array_to_tensor(rgb_imgs),
+            'xyz': data_augmentation.array_to_tensor(xyz_imgs),
         }
-        fg_masks, center_offsets, initial_masks, seg_masks = self.uois_net_3d.run_on_batch(batch)
+
+        if self.save_plots:
+            # save the batch to a temporary file for debugging
+            np.savez(f'batch_debug_{self.plt_ctr}.npz', rgb=rgb_imgs, xyz=xyz_imgs)
+
+            # also save the rgb and xyz images to image files for debugging
+            cv2.imwrite(f'rgb_debug_{self.plt_ctr}.png', rgb)
+            # save xyz as a 3-channel image for debugging
+            xyz_debug = (xyz - np.nanmin(xyz)) / (np.nanmax(xyz) - np.nanmin(xyz)) * 255
+            xyz_debug = np.nan_to_num(xyz_debug, nan=0.0)
+            xyz_debug = xyz_debug.astype(np.uint8)
+            cv2.imwrite(f'xyz_debug_{self.plt_ctr}.png', xyz_debug)
+
+        fg_masks, center_offsets, initial_masks, seg_masks = (self.uois_net_3d.run_on_batch(batch))
         seg_masks = seg_masks.cpu().numpy()
 
         self.get_logger().info(
@@ -468,12 +426,56 @@ class GraspProcessor(Node):
             f"unique={np.unique(seg_masks)[:20]}"
         )
 
-        return seg_masks[0]
+        # extract the single mask and resize it back to the original resolution
+        seg_mask = seg_masks[0]
+        # seg_mask = cv2.resize(seg_mask, (original_w, original_h), interpolation=cv2.INTER_NEAREST)
+
+        if self.save_plots:
+            # also save the segmentation mask to an image file for debugging
+            seg_mask_debug = (seg_mask / seg_mask.max() * 255).astype(np.uint8)
+            # overlay object labels
+            seg_img = cv2.cvtColor(seg_mask_debug, cv2.COLOR_RGB2BGR)
+            for label in np.unique(seg_masks):
+                if label == 0:
+                    continue
+
+                # Get pixels belonging to this object
+                ys, xs = np.where(seg_mask == label)
+
+                if len(xs) == 0:
+                    continue
+
+                # Compute centroid
+                cx = int(xs.mean())
+                cy = int(ys.mean())
+
+                # Draw label
+                cv2.putText(
+                    seg_img,
+                    f"Object {label}",
+                    (cx, cy),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 255, 255),
+                    2,
+                    cv2.LINE_AA,
+                )
+                
+            cv2.imwrite(f'seg_mask_debug_{self.plt_ctr}.png', seg_img)
+
+        return seg_mask
+
 
     def _cgn_infer(self, pcd, obj_mask=None, threshold=0.5):
         # adapted from https://github.com/sebjperalta/cgn_pytorch/blob/main/eval.py 
         cgn = self.model
         cgn.eval()
+
+        # The model should work on any pointcloud of shape (Nx3). 
+        # For most consistent results, please make sure to put the pointcloud in the world frame and center it by subtracting the mean.
+        # Do not normalize the pointcloud to a unit sphere or unit box, as "graspability" naturally changes depending on the size of the objects 
+        # (so we don't want to lose that information about the scene by scaling it).
+        # pcd = pcd - np.mean(pcd, axis=0, keepdims=True)
 
         if pcd.shape[0] > 20000:
             downsample = np.array(
@@ -617,6 +619,176 @@ class GraspProcessor(Node):
         z[~valid] = np.nan
 
         return np.stack((x, y, z), axis=-1)
+
+    def _save_grasp_visualization(
+        self,
+        rgb: np.ndarray,
+        grasps_matrices: np.ndarray,
+        scores: np.ndarray,
+        object_ids: np.ndarray,
+        output_path: str,
+        axis_length: float = 0.05,
+    ):
+        """Visualize 3D grasp poses projected onto an RGB image and save as PNG.
+
+        Args:
+            rgb: RGB image, shape (H, W, 3).
+            grasps_matrices: Grasp transforms, shape (N, 4, 4).
+                Assumed to be expressed in the camera optical frame.
+            scores: Grasp scores, shape (N,).
+            object_ids: Object ID associated with each grasp, shape (N,).
+            output_path: Path to save the PNG.
+            axis_length: Length of grasp-frame axes in meters.
+
+        Grasp frame visualization:
+            X axis -> red
+            Y axis -> green
+            Z axis -> blue
+        
+        NOTE: this is mostly AI generated code and may not be correct. 
+        the logic appears to check out though: project grasp poses into the image using the camera intrinsics, then draw them onto the image
+        """
+
+        ## PREPARE IMAGE
+        # OpenCV expects BGR for drawing/saving.
+        if rgb.dtype != np.uint8:
+            # Handle float images in either [0, 1] or [0, 255].
+            if rgb.max() <= 1.0:
+                rgb_vis = (rgb * 255.0).clip(0, 255).astype(np.uint8)
+            else:
+                rgb_vis = rgb.clip(0, 255).astype(np.uint8)
+        else:
+            rgb_vis = rgb.copy()
+
+        vis = cv2.cvtColor(rgb_vis, cv2.COLOR_RGB2BGR)
+        image_h, image_w = vis.shape[:2]
+
+        ## PROJECT POINTS INTO IMAGE
+        def project_point(point):
+            x, y, z = point
+
+            # Point is behind camera or on camera plane.
+            if z <= 0:
+                return None
+
+            u = self.fx * x / z + self.cx
+            v = self.fy * y / z + self.cy
+
+            return int(round(u)), int(round(v))
+
+        ## DRAW GRASPS
+        for grasp_idx, (T, score, object_id) in enumerate(zip(grasps_matrices, scores, object_ids)):
+            # Grasp position in camera frame
+            position = T[:3, 3]
+
+            p0 = project_point(position)
+
+            if p0 is None:
+                self.get_logger().warn(
+                    f"Grasp {grasp_idx} projected behind camera: "
+                    f"position={position}"
+                )
+                continue
+
+            u, v = p0
+
+            # dont draw if grasp position is outside image
+            if not (0 <= u < image_w and 0 <= v < image_h):
+                self.get_logger().warn(
+                    f"Grasp {grasp_idx} projected outside image: "
+                    f"u={u}, v={v}, image_w={image_w}, image_h={image_h}"
+                )
+                continue
+
+            # draw grasp center
+            cv2.circle(
+                vis,
+                p0,
+                radius=6,
+                color=(0, 255, 255),  # Yellow
+                thickness=-1,
+            )
+
+            cv2.circle(
+                vis,
+                p0,
+                radius=8,
+                color=(0, 0, 0),
+                thickness=2,
+            )
+
+            # draw coordinate frame
+            rotation = T[:3, :3]
+            axes = [
+                (rotation[:, 0], (0, 0, 255)),   # X -> red
+                (rotation[:, 1], (0, 255, 0)),   # Y -> green
+                (rotation[:, 2], (255, 0, 0)),   # Z -> blue
+            ]
+
+            for axis, color in axes:
+                endpoint_3d = position + axis * axis_length
+                p1 = project_point(endpoint_3d)
+
+                if p1 is None:
+                    continue
+
+                cv2.arrowedLine(
+                    vis,
+                    p0,
+                    p1,
+                    color,
+                    thickness=2,
+                    tipLength=0.2,
+                )
+
+            # draw label
+            label = f"obj={int(object_id)} score={float(score):.3f}"
+
+            text_x = u + 10
+            text_y = v - 10
+
+            # Keep text inside image reasonably
+            text_x = max(0, min(text_x, image_w - 200))
+            text_y = max(20, text_y)
+
+            # Black background for readability
+            (text_w, text_h), baseline = cv2.getTextSize(
+                label,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                1,
+            )
+
+            cv2.rectangle(
+                vis,
+                (text_x - 2, text_y - text_h - baseline - 2),
+                (text_x + text_w + 2, text_y + 2),
+                (0, 0, 0),
+                thickness=-1,
+            )
+
+            cv2.putText(
+                vis,
+                label,
+                (text_x, text_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+        # save png
+        success = cv2.imwrite(output_path, vis)
+
+        if not success:
+            raise RuntimeError(f"Failed to save grasp visualization to: {output_path}")
+
+        self.get_logger().info(
+            f"Saved grasp visualization with "
+            f"{len(grasps_matrices)} grasps to {output_path}"
+        )
+
 
 def main(args=None):
     rclpy.init(args=args)
